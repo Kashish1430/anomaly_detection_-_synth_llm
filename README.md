@@ -1,5 +1,7 @@
 # LLM-Augmented Transaction Anomaly Detection Engine
 
+[![CI](https://github.com/Kashish1430/anomaly_detection_-_synth_llm/actions/workflows/ci.yml/badge.svg)](https://github.com/Kashish1430/anomaly_detection_-_synth_llm/actions/workflows/ci.yml)
+
 A portfolio project: a synthetic retail-banking transaction dataset, an Isolation Forest / LightGBM anomaly-scoring pipeline, and a Claude reasoning layer that generates investigator-facing explanations for flagged transactions — validated with hypothesis testing and documented to SR 11-7 / PRA SS1/23 model-risk practice.
 
 > Independent portfolio project on synthetic data. Not a real bank engagement or a regulator-reviewed system — see `docs/model_validation_report.md` for the full scope statement.

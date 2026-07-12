@@ -30,12 +30,13 @@ Full plan, architecture, rationale, and week-by-week roadmap: **`PLAN.md`** (16 
 - [x] `notebooks/01_eda.ipynb` written and executed end-to-end (21 cells, no errors) — confirms scale/date range/anomaly rate match config, and includes an explicit leakage sanity check
 - [x] `docs/adr/0001-llm-provider-and-hosting-stack.md` recorded (Claude + EC2 + self-hosted Postgres decision)
 - [x] `git init`, default branch renamed `master` → `main` (to match `ci.yml`'s trigger), first commit made locally
+- [x] Pushed to GitHub: **https://github.com/Kashish1430/anomaly_detection_-_synth_llm** (`main` branch, tracked)
 - [ ] Anthropic API console account not yet set up (still needed before Week 4, not blocking Week 2)
-- [ ] Not yet pushed to GitHub — no remote configured. `gh` CLI is not installed/authenticated in this environment.
+- [ ] `ci.yml` not yet verified green on GitHub Actions (first push just happened — check the Actions tab)
 
 ## Next up
 
-1. **Push to GitHub** — needs a decision from the user: install + auth the `gh` CLI, or create the empty repo manually at github.com and hand back the remote URL. Then `git remote add origin <url> && git push -u origin main`.
+1. Check the GitHub Actions run on the first push is green (`.github/workflows/ci.yml`) — if the data-simulator smoke test or lint fails in CI despite passing locally, that's a Linux/Windows environment difference to debug, not a rewrite.
 2. **Week 2** (see `PLAN.md` §13): build `features/` (velocity, peer-group deviation, round-amount features per `PLAN.md` §04) on top of `data_sim`'s output, then an `IsolationForest` baseline. Definition of Done: feature pipeline unit-tested; honest "before" precision number logged to MLflow.
 
 Note for whoever picks this up: the anomaly injection rate *target* is 2% but the *actual* realised rate on the full run was 1.55% (`data/simulated/manifest.json` after regenerating — data itself isn't committed, see `.gitignore`). That gap is expected (each injector's row-budget-to-event math is approximate) and is not a bug; don't "fix" it without reading `data_sim/simulate.py`'s budget allocation first.
@@ -61,4 +62,4 @@ Note for whoever picks this up: the anomaly injection rate *target* is 2% but th
 
 - Plan: `PLAN.md`
 - Live demo: not yet deployed (target: Week 7)
-- Repo: not yet created on GitHub
+- Repo: https://github.com/Kashish1430/anomaly_detection_-_synth_llm
