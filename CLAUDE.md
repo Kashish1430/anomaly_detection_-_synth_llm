@@ -18,25 +18,27 @@ Full plan, architecture, rationale, and week-by-week roadmap: **`PLAN.md`** (16 
 
 ## Current status
 
-**Phase: Week 0 — planning complete, no code written yet.**
+**Phase: Week 1 — data simulator done, committed locally. Not yet pushed to GitHub.**
 
 - [x] Scoped the project, chosen LLM provider / stack / hosting (see decisions above)
 - [x] `PLAN.md` written — full 16-section master plan
 - [x] `CLAUDE.md` (this file) created
-- [ ] Week 1 not started: repo scaffold, environment setup, Anthropic API console account, transaction/customer simulator
+- [x] Repo scaffolded per `PLAN.md` §09; `pyproject.toml` (with `dev`/`model`/`llm`/`api`/`dashboard`/`notebooks` optional-dependency groups), pre-commit config, `.gitignore`, MIT `LICENSE`, `Makefile`, `.github/workflows/ci.yml`
+- [x] `data_sim/` built: vectorized customer + transaction generator, all 6 typology injectors (structuring, layering, round_amount, velocity_spike, peer_deviation, geographic_risk), pandera schemas, CLI (`python -m data_sim.simulate`)
+- [x] 8 unit tests, all passing; ruff/black/mypy clean
+- [x] Full-scale run verified: 12,000 customers, 1,219,924 transactions, generated in ~28s, anomaly rate 1.55% (target 2%), data quality checked (no nulls/non-positive amounts, realistic ~10% cross-border baseline after a fix, each typology shows a distinctive signature without being trivially separable — see notebook)
+- [x] `notebooks/01_eda.ipynb` written and executed end-to-end (21 cells, no errors) — confirms scale/date range/anomaly rate match config, and includes an explicit leakage sanity check
+- [x] `docs/adr/0001-llm-provider-and-hosting-stack.md` recorded (Claude + EC2 + self-hosted Postgres decision)
+- [x] `git init`, default branch renamed `master` → `main` (to match `ci.yml`'s trigger), first commit made locally
+- [ ] Anthropic API console account not yet set up (still needed before Week 4, not blocking Week 2)
+- [ ] Not yet pushed to GitHub — no remote configured. `gh` CLI is not installed/authenticated in this environment.
 
 ## Next up
 
-**Week 1 (see `PLAN.md` §13 for Definition of Done):**
-1. Set up an Anthropic API console account (separate from Claude.ai Pro) and load a small credit balance (~$5–15 expected total project spend)
-2. Scaffold the repo per `PLAN.md` §09 (`data_sim/`, `features/`, `models/`, `llm/`, `evaluation/`, `api/`, `dashboard/`, `docs/`, `infra/`, `tests/`, `.github/workflows/`, `notebooks/`)
-3. `pyproject.toml`, pre-commit hooks (ruff, black, mypy, gitleaks), `.gitignore`, `LICENSE` (MIT)
-4. Build the customer + transaction simulator (`data_sim/`) — the seeded, reproducible generator behind `make simulate`, producing ~1.2M transactions across ~8–15k synthetic customers with injected typologies at a documented rate
-5. `pandera` schema validation on the generated data
-6. EDA notebook committed
-7. Git init + first commit + push to GitHub (new public repo)
+1. **Push to GitHub** — needs a decision from the user: install + auth the `gh` CLI, or create the empty repo manually at github.com and hand back the remote URL. Then `git remote add origin <url> && git push -u origin main`.
+2. **Week 2** (see `PLAN.md` §13): build `features/` (velocity, peer-group deviation, round-amount features per `PLAN.md` §04) on top of `data_sim`'s output, then an `IsolationForest` baseline. Definition of Done: feature pipeline unit-tested; honest "before" precision number logged to MLflow.
 
-Definition of Done for Week 1: `make simulate` reproducibly generates the dataset with documented typology injection rates; EDA notebook committed.
+Note for whoever picks this up: the anomaly injection rate *target* is 2% but the *actual* realised rate on the full run was 1.55% (`data/simulated/manifest.json` after regenerating — data itself isn't committed, see `.gitignore`). That gap is expected (each injector's row-budget-to-event math is approximate) and is not a bug; don't "fix" it without reading `data_sim/simulate.py`'s budget allocation first.
 
 ## Working agreements
 
