@@ -24,6 +24,7 @@ mlartifacts/
 
 # Notebooks
 .ipynb_checkpoints/
+notebooks/temp.ipynb
 
 # OS / editor
 .DS_Store
