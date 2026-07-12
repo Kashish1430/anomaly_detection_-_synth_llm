@@ -25,8 +25,7 @@ Full plan, architecture, rationale, and week-by-week roadmap: **`PLAN.md`** (16 
 - [x] **Real "after" number produced**: 58.3% precision (95% CI [56.8%, 59.9%]), recall 83.6% @ 2% capacity — up from Week 2's 30.0% baseline. A genuine, large improvement from adding behavioural features + supervised learning, still below the CV draft's 89% placeholder (expected, per the integrity rule - see Measured results below for the full story, including a real methodological finding worth knowing about before re-running this).
 - [x] 38 tests total (added `test_evaluation.py`, `test_lightgbm.py`), all passing; ruff/black/mypy clean; `evaluation` added back to the CI/Makefile mypy scope now that it has real content
 - [ ] Threshold tuning via two-proportion z-tests did **not** find a statistically validated false-positive reduction over the naive top-2%-capacity cutoff, in two different calibration approaches - see the finding below. This is reported honestly rather than engineered away; it's a real result, not a bug to keep chasing.
-- [ ] Anthropic API console account not yet set up (needed before Week 4)
-- [ ] Not yet committed/pushed as of this status update (see Next up)
+- [x] All Week 3 work committed and pushed to `main`; GitHub Actions green (run for commit `2bc0dea`)
 
 <details>
 <summary>Finding: threshold tuning did not beat the naive capacity cutoff (click for the full story)</summary>
@@ -44,13 +43,10 @@ Checked whether this is target drift (anomaly rate or typology mix shifting acro
 **Weeks 1-2 (complete, see git history for detail):** repo scaffold, `PLAN.md`/`CLAUDE.md`, `data_sim/` (1.2M-row simulator, 6 typology injectors), `notebooks/01_eda.ipynb`, `features/` (18 leakage-safe engineered features), `models/baseline.py` (IsolationForest, 30.0% "before" precision). Two real bugs found and fixed along the way: a z-score numerical blow-up (`features/utils.py`), and CI silently red since the first push (mypy on empty directories) - both documented in git commit messages if the detail is ever needed.
 
 - [ ] Anthropic API console account not yet set up (needed before Week 4)
-- [ ] Not yet committed/pushed as of this status update (see Next up)
 
 ## Next up
 
-1. Commit and push the Week 3 work (`evaluation/`, `models/lightgbm_model.py`, `models/tuning.py`, `models/train_lightgbm.py`, new tests) - not yet done as of this status update.
-2. Check GitHub Actions is green after that push.
-3. **Week 4** (see `PLAN.md` §13 and §06): Claude reasoning layer. First real action item: set up the Anthropic API console account (separate from Claude.ai Pro - see the binding decision above) and load a small credit balance. Then `llm/`: prompt design + structured output (tool-use) schema, the fact-checking guardrail that cross-references every number in a generated explanation against source data, Haiku for the bulk pass, Sonnet for a sample typology-classification accuracy check, response caching in Postgres (or a local cache for now, since Postgres itself is a Week 6 concern). Definition of Done: end-to-end explanation pipeline on a sample of flagged transactions, real API cost logged.
+**Week 4** (see `PLAN.md` §13 and §06): Claude reasoning layer. First real action item: set up the Anthropic API console account (separate from Claude.ai Pro - see the binding decision above) and load a small credit balance. Then `llm/`: prompt design + structured output (tool-use) schema, the fact-checking guardrail that cross-references every number in a generated explanation against source data, Haiku for the bulk pass, Sonnet for a sample typology-classification accuracy check, response caching (Postgres itself is a Week 6 concern, so a local cache for now). Definition of Done: end-to-end explanation pipeline on a sample of flagged transactions, real API cost logged.
 
 Habit to keep: check the GitHub Actions tab right after every push, not just local test runs - local and CI already diverged once (empty-directory mypy behavior) and could again.
 
