@@ -6,11 +6,11 @@ A portfolio project: a synthetic retail-banking transaction dataset, an Isolatio
 
 > Independent portfolio project on synthetic data. Not a real bank engagement or a regulator-reviewed system — see `docs/model_validation_report.md` for the full scope statement.
 
-Full plan and rationale: [`PLAN.md`](PLAN.md). Current status and next steps: [`CLAUDE.md`](CLAUDE.md).
+Full plan and rationale: [`PLAN.md`](PLAN.md). Current status and next steps: [`CLAUDE.md`](CLAUDE.md). What every column/feature means: [`docs/data_dictionary.md`](docs/data_dictionary.md).
 
 ## Status
 
-Week 1 in progress — data simulator. No deployed demo yet.
+Week 2 done (feature pipeline + IsolationForest baseline). Week 3 (LightGBM + threshold tuning) next. No deployed demo yet.
 
 ## Quickstart
 
