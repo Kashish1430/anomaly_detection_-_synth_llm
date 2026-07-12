@@ -35,15 +35,15 @@ Full plan, architecture, rationale, and week-by-week roadmap: **`PLAN.md`** (16 
 - [x] `models/baseline.py` + `evaluate.py` + `train_baseline.py`: IsolationForest fit on a time-based 80/20 split (not random — patterns drift over time), evaluated at a 2%-review-capacity naive threshold, logged to MLflow (`mlruns/`, gitignored)
 - [x] 19 tests total, all passing; ruff/black clean
 - [x] **Real "before" number produced** (see Measured results below) — meaningfully different from the CV draft's 71% placeholder, which is expected and correct per the integrity rule: this is the *unsupervised, untuned* baseline; Week 3's supervised LightGBM + threshold tuning is what's supposed to close that gap
+- [x] Found and fixed a second bug: `ci.yml`/`Makefile` ran `mypy` over empty package directories (`evaluation`, `llm`, `api`), which mypy errors out on - **CI had been red since the very first Week 1 push** without anyone noticing, because local runs never included the empty dirs and looked clean. Scoped both to only packages with source in them; confirmed green on GitHub Actions after the fix (run succeeded for commit `2e48f53`). Lesson: "passes locally" was not sufficient evidence - should have checked the Actions tab immediately after the first push, not several commits later.
+- [x] All Week 2 work committed and pushed to `main`; GitHub Actions green.
 - [ ] Anthropic API console account not yet set up (needed before Week 4, not blocking Week 3)
-- [ ] `ci.yml` not yet re-verified green on GitHub Actions since Week 2 pushes — check the Actions tab
-- [ ] `models/` and the fixed `features/`/`notebooks/` changes are staged locally but not yet committed/pushed (see Next up)
 
 ## Next up
 
-1. Commit and push the `models/` package (baseline.py, evaluate.py, train_baseline.py, tests/test_models.py) — not yet done as of this status update.
-2. Check GitHub Actions is green on `main` after that push.
-3. **Week 3** (see `PLAN.md` §13): `LightGBM` classifier trained on the IsolationForest score + full feature set, tuned with Optuna, logged to MLflow. Then real threshold tuning via two-proportion z-tests (not the naive top-2%-by-score cut used for the Week 2 baseline) and time-based cross-validation (`PLAN.md` §07). Definition of Done: honest "after" precision number with a confidence interval.
+**Week 3** (see `PLAN.md` §13): `LightGBM` classifier trained on the IsolationForest score + full feature set, tuned with Optuna, logged to MLflow. Then real threshold tuning via two-proportion z-tests (not the naive top-2%-by-score cut used for the Week 2 baseline) and time-based cross-validation (`PLAN.md` §07). Definition of Done: honest "after" precision number with a confidence interval.
+
+Habit to keep from Week 2: check the GitHub Actions tab right after every push, not just local test runs - local and CI environments diverged once already (empty-directory mypy behavior) and could again.
 
 Note for whoever picks this up: the anomaly injection rate *target* is 2% but the *actual* realised rate on the full run was 1.55% (`data/simulated/manifest.json` after regenerating — data itself isn't committed, see `.gitignore`). That gap is expected (each injector's row-budget-to-event math is approximate) and is not a bug; don't "fix" it without reading `data_sim/simulate.py`'s budget allocation first.
 
