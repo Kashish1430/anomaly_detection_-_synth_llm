@@ -18,34 +18,41 @@ Full plan, architecture, rationale, and week-by-week roadmap: **`PLAN.md`** (16 
 
 ## Current status
 
-**Phase: Week 2 — feature pipeline + IsolationForest baseline done. Week 2 DoD met.**
+**Phase: Week 3 — LightGBM + Optuna + time-based CV + z-test threshold tuning done. Week 3 DoD met, with an honest caveat on the threshold-tuning result (see below).**
 
-- [x] Scoped the project, chosen LLM provider / stack / hosting (see decisions above)
-- [x] `PLAN.md` written — full 16-section master plan
-- [x] `CLAUDE.md` (this file) created
-- [x] Repo scaffolded per `PLAN.md` §09; `pyproject.toml` (with `dev`/`model`/`llm`/`api`/`dashboard`/`notebooks` optional-dependency groups), pre-commit config, `.gitignore`, MIT `LICENSE`, `Makefile`, `.github/workflows/ci.yml`
-- [x] `data_sim/` built: vectorized customer + transaction generator, all 6 typology injectors (structuring, layering, round_amount, velocity_spike, peer_deviation, geographic_risk), pandera schemas, CLI (`python -m data_sim.simulate`)
-- [x] Full-scale run verified: 12,000 customers, 1,219,924 transactions, generated in ~28s, anomaly rate 1.55% (target 2%), data quality checked (no nulls/non-positive amounts, realistic ~10% cross-border baseline after a fix, each typology shows a distinctive signature without being trivially separable — see notebook)
-- [x] `notebooks/01_eda.ipynb` written and executed end-to-end (23 cells, no errors) — confirms scale/date range/anomaly rate match config, and includes an explicit leakage sanity check
-- [x] `docs/adr/0001-llm-provider-and-hosting-stack.md` recorded (Claude + EC2 + self-hosted Postgres decision)
-- [x] `git init`, default branch renamed `master` → `main` (to match `ci.yml`'s trigger)
-- [x] Pushed to GitHub: **https://github.com/Kashish1430/anomaly_detection_-_synth_llm** (`main` branch, tracked)
-- [x] `features/` built: velocity (rolling 1h/24h/7d/30d), peer-group z-score, round-amount flags, behavioural (amount-to-own-average ratio, new-counterparty, channel-switch) and contextual (hour-of-day deviation) features — every "customer's own baseline" stat is prior-only/expanding (leakage-safe), covered by an explicit leakage-guard test
-- [x] Found and fixed a real numerical bug: `personal_amount_zscore` could blow up to ~8.6e8 from float cancellation in the variance formula for customers with near-identical prior amounts; fixed with a magnitude-relative std floor, verified extreme values are now rare (0.15% of rows) and ~30x enriched for genuine anomalies (not noise)
-- [x] `models/baseline.py` + `evaluate.py` + `train_baseline.py`: IsolationForest fit on a time-based 80/20 split (not random — patterns drift over time), evaluated at a 2%-review-capacity naive threshold, logged to MLflow (`mlruns/`, gitignored)
-- [x] 19 tests total, all passing; ruff/black clean
-- [x] **Real "before" number produced** (see Measured results below) — meaningfully different from the CV draft's 71% placeholder, which is expected and correct per the integrity rule: this is the *unsupervised, untuned* baseline; Week 3's supervised LightGBM + threshold tuning is what's supposed to close that gap
-- [x] Found and fixed a second bug: `ci.yml`/`Makefile` ran `mypy` over empty package directories (`evaluation`, `llm`, `api`), which mypy errors out on - **CI had been red since the very first Week 1 push** without anyone noticing, because local runs never included the empty dirs and looked clean. Scoped both to only packages with source in them; confirmed green on GitHub Actions after the fix (run succeeded for commit `2e48f53`). Lesson: "passes locally" was not sufficient evidence - should have checked the Actions tab immediately after the first push, not several commits later.
-- [x] All Week 2 work committed and pushed to `main`; GitHub Actions green.
-- [ ] Anthropic API console account not yet set up (needed before Week 4, not blocking Week 3)
+- [x] `evaluation/` built: `splits.py` (time-ordered train/val/test + expanding-window CV), `stats.py` (Wilson confidence intervals, two-proportion z-test), `threshold_tuning.py` (z-test-based threshold selection)
+- [x] `models/lightgbm_model.py` + `tuning.py` (Optuna, `class_weight="balanced"` for the ~1.5% positive rate) + `train_lightgbm.py`: IsolationForest score (fit on TRAIN only) added as a feature alongside the 18 engineered ones; LightGBM tuned via 30 Optuna trials × 4-fold expanding-window CV, strictly within TRAIN; final model evaluated once on a TEST set untouched by tuning or threshold selection
+- [x] **Real "after" number produced**: 58.3% precision (95% CI [56.8%, 59.9%]), recall 83.6% @ 2% capacity — up from Week 2's 30.0% baseline. A genuine, large improvement from adding behavioural features + supervised learning, still below the CV draft's 89% placeholder (expected, per the integrity rule - see Measured results below for the full story, including a real methodological finding worth knowing about before re-running this).
+- [x] 38 tests total (added `test_evaluation.py`, `test_lightgbm.py`), all passing; ruff/black/mypy clean; `evaluation` added back to the CI/Makefile mypy scope now that it has real content
+- [ ] Threshold tuning via two-proportion z-tests did **not** find a statistically validated false-positive reduction over the naive top-2%-capacity cutoff, in two different calibration approaches - see the finding below. This is reported honestly rather than engineered away; it's a real result, not a bug to keep chasing.
+- [ ] Anthropic API console account not yet set up (needed before Week 4)
+- [ ] Not yet committed/pushed as of this status update (see Next up)
+
+<details>
+<summary>Finding: threshold tuning did not beat the naive capacity cutoff (click for the full story)</summary>
+
+Two attempts, same qualitative result:
+
+1. **First attempt** — selected the threshold on a single VALIDATION block (the 15% of data immediately before TEST). Result: precision 67.0% @ capacity on TEST, but the z-test-chosen "improved" threshold made FP rate *worse* on TEST (+17.7%), despite looking like a significant improvement on VALIDATION (p=0.0001). Classic single-split overfitting risk.
+2. **Second attempt** (current code) — refit the tuned model across 4 expanding-window folds *within* TRAIN and pooled out-of-fold predictions (512K rows spanning multiple time windows) for threshold selection instead. More statistically robust by construction, but produced a *lower* capacity-threshold precision on TEST (58.3%, not 67.0%) and the z-test-chosen threshold again made FP rate worse (+17.3%), not better.
+
+Checked whether this is target drift (anomaly rate or typology mix shifting across train/val/test): **no** - anomaly rate is 1.52%/1.68%/1.55% and typology proportions are within a few points of each other across all three splits. So the gap is either (a) score-calibration drift in the model itself over time, or (b) finite-sample noise in the threshold estimate - not distinguished yet, and not chased further this session per the integrity rule (two consistent negative results is a real finding, not a reason to keep searching for a threshold that "works").
+
+**Decision:** report 58.3% (the more statistically defensible, larger-sample OOF-calibrated number) as the honest "after" precision, not 67.0% (which looked better but came from a single, smaller, less robust calibration window). Report the threshold-tuning attempt as a validated null result, not a success - the two-proportion z-test methodology worked exactly as intended: it caught that the "improvement" wasn't real, on both attempts. Revisit in Week 5 (`model_validation_report.md` sensitivity analysis) if there's time - candidate follow-ups: cost-weighted optimization instead of FP-rate-only, or checking per-typology threshold sensitivity rather than one global threshold.
+</details>
+
+**Weeks 1-2 (complete, see git history for detail):** repo scaffold, `PLAN.md`/`CLAUDE.md`, `data_sim/` (1.2M-row simulator, 6 typology injectors), `notebooks/01_eda.ipynb`, `features/` (18 leakage-safe engineered features), `models/baseline.py` (IsolationForest, 30.0% "before" precision). Two real bugs found and fixed along the way: a z-score numerical blow-up (`features/utils.py`), and CI silently red since the first push (mypy on empty directories) - both documented in git commit messages if the detail is ever needed.
+
+- [ ] Anthropic API console account not yet set up (needed before Week 4)
+- [ ] Not yet committed/pushed as of this status update (see Next up)
 
 ## Next up
 
-**Week 3** (see `PLAN.md` §13): `LightGBM` classifier trained on the IsolationForest score + full feature set, tuned with Optuna, logged to MLflow. Then real threshold tuning via two-proportion z-tests (not the naive top-2%-by-score cut used for the Week 2 baseline) and time-based cross-validation (`PLAN.md` §07). Definition of Done: honest "after" precision number with a confidence interval.
+1. Commit and push the Week 3 work (`evaluation/`, `models/lightgbm_model.py`, `models/tuning.py`, `models/train_lightgbm.py`, new tests) - not yet done as of this status update.
+2. Check GitHub Actions is green after that push.
+3. **Week 4** (see `PLAN.md` §13 and §06): Claude reasoning layer. First real action item: set up the Anthropic API console account (separate from Claude.ai Pro - see the binding decision above) and load a small credit balance. Then `llm/`: prompt design + structured output (tool-use) schema, the fact-checking guardrail that cross-references every number in a generated explanation against source data, Haiku for the bulk pass, Sonnet for a sample typology-classification accuracy check, response caching in Postgres (or a local cache for now, since Postgres itself is a Week 6 concern). Definition of Done: end-to-end explanation pipeline on a sample of flagged transactions, real API cost logged.
 
-Habit to keep from Week 2: check the GitHub Actions tab right after every push, not just local test runs - local and CI environments diverged once already (empty-directory mypy behavior) and could again.
-
-Note for whoever picks this up: the anomaly injection rate *target* is 2% but the *actual* realised rate on the full run was 1.55% (`data/simulated/manifest.json` after regenerating — data itself isn't committed, see `.gitignore`). That gap is expected (each injector's row-budget-to-event math is approximate) and is not a bug; don't "fix" it without reading `data_sim/simulate.py`'s budget allocation first.
+Habit to keep: check the GitHub Actions tab right after every push, not just local test runs - local and CI already diverged once (empty-directory mypy behavior) and could again.
 
 ## Working agreements
 
@@ -59,9 +66,9 @@ Note for whoever picks this up: the anomaly injection rate *target* is 2% but th
 | Metric | Value | Source | Date |
 |---|---|---|---|
 | Baseline ("before") precision | **30.0%** (recall 38.4%, F1 33.7%, PR-AUC 0.248) @ 2% review-capacity threshold, vs. 1.56% base rate (~19x enrichment) | `models/train_baseline.py`, IsolationForest, time-based 80/20 split, full 1.22M-row dataset, seed=42 | 2026-07-12 |
-| Final ("after") precision | — | — | — |
-| False-positive reduction | — | — | — |
-| Manual review effort reduction | — | — | — |
+| Final ("after") precision | **58.3%** (95% CI [56.8%, 59.9%]), recall 83.6% @ 2% capacity | `models/train_lightgbm.py`, LightGBM + IF-score feature, Optuna-tuned (30 trials × 4-fold expanding-window CV), time-based 70/15/15 split, threshold calibrated on 512K out-of-fold rows spanning multiple time windows within TRAIN, evaluated once on untouched TEST, full 1.22M-row dataset, seed=42 | 2026-07-12 |
+| False-positive reduction (threshold tuning) | **Not validated.** Two-proportion z-test found the "optimized" threshold *increased* FP rate by ~17% on TEST in both a single-validation-block attempt and a more robust out-of-fold attempt (p<0.0001 both times, in the wrong direction). Reported honestly as a null result rather than re-run until something better appears - see the collapsible finding above. The naive top-2%-capacity cutoff remains the best threshold found so far. | `models/train_lightgbm.py` + `evaluation/threshold_tuning.py` | 2026-07-12 |
+| Manual review effort reduction | — (depends on the final triage workflow design, Week 6) | — | — |
 | Claude API total spend | — | — | — |
 
 ## Links

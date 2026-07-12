@@ -27,11 +27,13 @@ jobs:
 
       - name: Type check (mypy)
         # only packages that currently have source files - mypy errors out on an
-        # empty directory. Extend this list as evaluation/llm/api/dashboard land.
-        run: mypy data_sim features models
+        # empty directory. Extend this list as llm/api/dashboard land.
+        run: mypy data_sim features models evaluation
 
       - name: Test
-        run: pytest -v --cov=data_sim --cov=features --cov=models --cov-report=term-missing
+        run: >-
+          pytest -v --cov=data_sim --cov=features --cov=models --cov=evaluation
+          --cov-report=term-missing
 
       - name: Data simulator smoke test
         run: python -m data_sim.simulate --n-customers 300 --n-transactions 8000 --output-dir data/ci_smoke --seed 1
