@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev,model]"
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format check (black)
+        run: black --check .
+
+      - name: Type check (mypy)
+        run: mypy data_sim features evaluation
+
+      - name: Test
+        run: pytest -v --cov=data_sim --cov=features --cov-report=term-missing
+
+      - name: Data simulator smoke test
+        run: python -m data_sim.simulate --n-customers 300 --n-transactions 8000 --output-dir data/ci_smoke --seed 1

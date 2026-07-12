@@ -1,0 +1,83 @@
+[project]
+name = "anomaly-detection-engine"
+version = "0.1.0"
+description = "LLM-augmented transaction anomaly detection engine for retail-banking AML triage (portfolio project, synthetic data)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+
+dependencies = [
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "pyarrow>=15.0",
+    "faker>=24.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.66",
+    "pandera>=0.18",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.4",
+    "black>=24.0",
+    "mypy>=1.9",
+    "pre-commit>=3.7",
+]
+model = [
+    "scikit-learn>=1.4",
+    "lightgbm>=4.3",
+    "optuna>=3.6",
+    "mlflow>=2.12",
+    "statsmodels>=0.14",
+]
+llm = [
+    "anthropic>=0.25",
+]
+notebooks = [
+    "jupyter>=1.0",
+    "ipykernel>=6.29",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+]
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.6",
+    "psycopg[binary]>=3.1",
+]
+dashboard = [
+    "streamlit>=1.33",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    # pandas 2.3.x / numpy 2.x internal concat path emits this for NaT handling
+    # regardless of our code - not something we can fix from the caller side.
+    "ignore:The 'generic' unit for NumPy timedelta is deprecated:DeprecationWarning",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["data_sim*", "features*", "models*", "llm*", "evaluation*", "api*"]
