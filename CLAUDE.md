@@ -18,26 +18,32 @@ Full plan, architecture, rationale, and week-by-week roadmap: **`PLAN.md`** (16 
 
 ## Current status
 
-**Phase: Week 1 — data simulator done, committed locally. Not yet pushed to GitHub.**
+**Phase: Week 2 — feature pipeline + IsolationForest baseline done. Week 2 DoD met.**
 
 - [x] Scoped the project, chosen LLM provider / stack / hosting (see decisions above)
 - [x] `PLAN.md` written — full 16-section master plan
 - [x] `CLAUDE.md` (this file) created
 - [x] Repo scaffolded per `PLAN.md` §09; `pyproject.toml` (with `dev`/`model`/`llm`/`api`/`dashboard`/`notebooks` optional-dependency groups), pre-commit config, `.gitignore`, MIT `LICENSE`, `Makefile`, `.github/workflows/ci.yml`
 - [x] `data_sim/` built: vectorized customer + transaction generator, all 6 typology injectors (structuring, layering, round_amount, velocity_spike, peer_deviation, geographic_risk), pandera schemas, CLI (`python -m data_sim.simulate`)
-- [x] 8 unit tests, all passing; ruff/black/mypy clean
 - [x] Full-scale run verified: 12,000 customers, 1,219,924 transactions, generated in ~28s, anomaly rate 1.55% (target 2%), data quality checked (no nulls/non-positive amounts, realistic ~10% cross-border baseline after a fix, each typology shows a distinctive signature without being trivially separable — see notebook)
-- [x] `notebooks/01_eda.ipynb` written and executed end-to-end (21 cells, no errors) — confirms scale/date range/anomaly rate match config, and includes an explicit leakage sanity check
+- [x] `notebooks/01_eda.ipynb` written and executed end-to-end (23 cells, no errors) — confirms scale/date range/anomaly rate match config, and includes an explicit leakage sanity check
 - [x] `docs/adr/0001-llm-provider-and-hosting-stack.md` recorded (Claude + EC2 + self-hosted Postgres decision)
-- [x] `git init`, default branch renamed `master` → `main` (to match `ci.yml`'s trigger), first commit made locally
+- [x] `git init`, default branch renamed `master` → `main` (to match `ci.yml`'s trigger)
 - [x] Pushed to GitHub: **https://github.com/Kashish1430/anomaly_detection_-_synth_llm** (`main` branch, tracked)
-- [ ] Anthropic API console account not yet set up (still needed before Week 4, not blocking Week 2)
-- [ ] `ci.yml` not yet verified green on GitHub Actions (first push just happened — check the Actions tab)
+- [x] `features/` built: velocity (rolling 1h/24h/7d/30d), peer-group z-score, round-amount flags, behavioural (amount-to-own-average ratio, new-counterparty, channel-switch) and contextual (hour-of-day deviation) features — every "customer's own baseline" stat is prior-only/expanding (leakage-safe), covered by an explicit leakage-guard test
+- [x] Found and fixed a real numerical bug: `personal_amount_zscore` could blow up to ~8.6e8 from float cancellation in the variance formula for customers with near-identical prior amounts; fixed with a magnitude-relative std floor, verified extreme values are now rare (0.15% of rows) and ~30x enriched for genuine anomalies (not noise)
+- [x] `models/baseline.py` + `evaluate.py` + `train_baseline.py`: IsolationForest fit on a time-based 80/20 split (not random — patterns drift over time), evaluated at a 2%-review-capacity naive threshold, logged to MLflow (`mlruns/`, gitignored)
+- [x] 19 tests total, all passing; ruff/black clean
+- [x] **Real "before" number produced** (see Measured results below) — meaningfully different from the CV draft's 71% placeholder, which is expected and correct per the integrity rule: this is the *unsupervised, untuned* baseline; Week 3's supervised LightGBM + threshold tuning is what's supposed to close that gap
+- [ ] Anthropic API console account not yet set up (needed before Week 4, not blocking Week 3)
+- [ ] `ci.yml` not yet re-verified green on GitHub Actions since Week 2 pushes — check the Actions tab
+- [ ] `models/` and the fixed `features/`/`notebooks/` changes are staged locally but not yet committed/pushed (see Next up)
 
 ## Next up
 
-1. Check the GitHub Actions run on the first push is green (`.github/workflows/ci.yml`) — if the data-simulator smoke test or lint fails in CI despite passing locally, that's a Linux/Windows environment difference to debug, not a rewrite.
-2. **Week 2** (see `PLAN.md` §13): build `features/` (velocity, peer-group deviation, round-amount features per `PLAN.md` §04) on top of `data_sim`'s output, then an `IsolationForest` baseline. Definition of Done: feature pipeline unit-tested; honest "before" precision number logged to MLflow.
+1. Commit and push the `models/` package (baseline.py, evaluate.py, train_baseline.py, tests/test_models.py) — not yet done as of this status update.
+2. Check GitHub Actions is green on `main` after that push.
+3. **Week 3** (see `PLAN.md` §13): `LightGBM` classifier trained on the IsolationForest score + full feature set, tuned with Optuna, logged to MLflow. Then real threshold tuning via two-proportion z-tests (not the naive top-2%-by-score cut used for the Week 2 baseline) and time-based cross-validation (`PLAN.md` §07). Definition of Done: honest "after" precision number with a confidence interval.
 
 Note for whoever picks this up: the anomaly injection rate *target* is 2% but the *actual* realised rate on the full run was 1.55% (`data/simulated/manifest.json` after regenerating — data itself isn't committed, see `.gitignore`). That gap is expected (each injector's row-budget-to-event math is approximate) and is not a bug; don't "fix" it without reading `data_sim/simulate.py`'s budget allocation first.
 
@@ -52,7 +58,7 @@ Note for whoever picks this up: the anomaly injection rate *target* is 2% but th
 
 | Metric | Value | Source | Date |
 |---|---|---|---|
-| Baseline ("before") precision | — | — | — |
+| Baseline ("before") precision | **30.0%** (recall 38.4%, F1 33.7%, PR-AUC 0.248) @ 2% review-capacity threshold, vs. 1.56% base rate (~19x enrichment) | `models/train_baseline.py`, IsolationForest, time-based 80/20 split, full 1.22M-row dataset, seed=42 | 2026-07-12 |
 | Final ("after") precision | — | — | — |
 | False-positive reduction | — | — | — |
 | Manual review effort reduction | — | — | — |
