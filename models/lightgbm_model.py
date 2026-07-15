@@ -26,3 +26,13 @@ def fit_lightgbm(
 
 def predict_proba_anomaly(model: lgb.LGBMClassifier, X: pd.DataFrame) -> np.ndarray:
     return model.predict_proba(X)[:, 1]
+
+
+def predict_shap_contributions(model: lgb.LGBMClassifier, X: pd.DataFrame) -> np.ndarray:
+    """Exact TreeSHAP feature contributions (log-odds scale) via LightGBM's native
+    `pred_contrib` - the same algorithm the `shap` package implements, with no extra
+    dependency. Shape (n_rows, n_features + 1); the last column is the base value
+    (the model's expected output with no feature information), so each row's
+    contributions plus the base value sum to that row's raw-margin prediction.
+    """
+    return model.predict(X, pred_contrib=True)

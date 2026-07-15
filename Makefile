@@ -20,8 +20,8 @@ format:
 	ruff check --fix .
 
 # mypy errors on a directory with no .py files - only list packages that exist
-# with source in them yet; extend as llm/api/dashboard land.
+# with source in them yet; extend as api/dashboard land.
 typecheck:
-	mypy data_sim features models evaluation
+	mypy data_sim features models evaluation llm
 
 check: lint typecheck test

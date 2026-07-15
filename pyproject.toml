@@ -34,6 +34,8 @@ model = [
 ]
 llm = [
     "anthropic>=0.25",
+    "openai>=1.0",
+    "pydantic>=2.6",
 ]
 notebooks = [
     "jupyter>=1.0",

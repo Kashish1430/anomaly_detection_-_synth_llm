@@ -6,7 +6,7 @@ import pytest
 
 from data_sim.config import SimConfig
 from data_sim.simulate import run as simulate_run
-from models.lightgbm_model import fit_lightgbm, predict_proba_anomaly
+from models.lightgbm_model import fit_lightgbm, predict_proba_anomaly, predict_shap_contributions
 from models.train_lightgbm import run as train_lightgbm_run
 from models.tuning import tune_lightgbm
 
@@ -22,6 +22,23 @@ def test_lightgbm_fit_predict_shape_and_range():
 
     assert proba.shape == (n,)
     assert (proba >= 0).all() and (proba <= 1).all()
+
+
+def test_predict_shap_contributions_sums_to_raw_margin():
+    """The fundamental TreeSHAP guarantee: each row's feature contributions plus
+    the base value must equal that row's raw-margin prediction. If this ever
+    fails, `predict_shap_contributions` is wired up wrong, not a model issue."""
+    rng = np.random.default_rng(2)
+    n = 1000
+    X = pd.DataFrame({"a": rng.normal(size=n), "b": rng.normal(size=n)})
+    y = (X["a"] + rng.normal(scale=0.5, size=n) > 1.0).astype(int).to_numpy()
+
+    model = fit_lightgbm(X, y, random_state=1)
+    contributions = predict_shap_contributions(model, X)
+    raw_margin = model.predict(X, raw_score=True)
+
+    assert contributions.shape == (n, X.shape[1] + 1)
+    assert np.allclose(contributions.sum(axis=1), raw_margin, atol=1e-6)
 
 
 def test_lightgbm_recovers_a_strong_signal():
