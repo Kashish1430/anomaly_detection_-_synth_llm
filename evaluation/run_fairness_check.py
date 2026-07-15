@@ -5,17 +5,18 @@ import json
 import logging
 from pathlib import Path
 
-import lightgbm as lgb
-import mlflow
-import mlflow.lightgbm
 import pandas as pd
 
 from data_sim.config import HIGH_RISK_COUNTRIES
-from evaluation.fairness import flagging_rate_by_group, parity_tests_vs_reference
+from evaluation.fairness import (
+    flagging_rate_by_group,
+    parity_tests_vs_reference,
+    performance_by_group,
+)
 from evaluation.splits import time_ordered_split
 from features.pipeline import FEATURE_COLUMNS, build_feature_table
 from models.baseline import fit_isolation_forest, score_anomaly
-from models.lightgbm_model import predict_proba_anomaly
+from models.lightgbm_model import load_tuned_model_and_threshold, predict_proba_anomaly
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -47,19 +48,6 @@ def _load_features(
     return build_feature_table(transactions, customers)
 
 
-def _load_tuned_model_and_threshold(run_id: str) -> tuple[lgb.LGBMClassifier, float]:
-    client = mlflow.MlflowClient()
-    mlflow_run = client.get_run(run_id)
-    threshold = float(mlflow_run.data.params["capacity_threshold"])
-    logged_model = next(
-        m
-        for m in client.search_logged_models(experiment_ids=[mlflow_run.info.experiment_id])
-        if m.source_run_id == run_id
-    )
-    model = mlflow.lightgbm.load_model(f"models:/{logged_model.model_id}")
-    return model, threshold
-
-
 def run(
     data_dir: Path,
     run_id: str = DEFAULT_RUN_ID,
@@ -68,8 +56,8 @@ def run(
     seed: int = 42,
     alpha: float = 0.05,
 ) -> dict:
-    
-    model, threshold = _load_tuned_model_and_threshold(run_id)
+
+    model, threshold = load_tuned_model_and_threshold(run_id)
 
     customers = pd.read_parquet(data_dir / "customers.parquet")
     transactions = pd.read_parquet(data_dir / "transactions.parquet")
@@ -111,18 +99,28 @@ def run(
         threshold,
     )
 
+    y_true = test["is_anomalous"].astype(bool)
+
     results: dict = {}
     for group_col, reference in GROUP_COLUMNS.items():
         group = test[group_col]
         rates = flagging_rate_by_group(flagged, group, alpha=alpha)
         parity = parity_tests_vs_reference(flagged, group, reference=reference, alpha=alpha)
+        # ground-truth-aware complement to the two checks above: tells apart a
+        # flagging-rate gap explained by a genuinely different true anomaly
+        # rate from one that isn't (see evaluation/fairness.py docstring)
+        performance = performance_by_group(y_true, flagged, group)
         results[group_col] = {
             "reference": reference,
             "rates": rates.to_dict(orient="records"),
             "parity_tests": parity.to_dict(orient="records"),
+            "performance": performance.to_dict(orient="records"),
         }
         log.info("%s flagging rates:\n%s", group_col, rates.to_string(index=False))
         log.info("%s parity tests vs %r:\n%s", group_col, reference, parity.to_string(index=False))
+        log.info(
+            "%s true-rate/precision/recall:\n%s", group_col, performance.to_string(index=False)
+        )
 
     return results
 

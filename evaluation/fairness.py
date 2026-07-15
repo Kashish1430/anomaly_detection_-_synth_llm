@@ -63,3 +63,34 @@ def parity_tests_vs_reference(
             }
         )
     return pd.DataFrame(rows)
+
+
+def performance_by_group(y_true: pd.Series, flagged: pd.Series, group: pd.Series) -> pd.DataFrame:
+    """Equalized-odds-style check (PLAN.md §08), the complement to
+    `flagging_rate_by_group`'s statistical-parity check: a flagging-rate gap
+    between groups can be legitimate (one group genuinely has a higher true
+    anomaly rate) or a real model bias (the model over/under-flags a group
+    relative to what the ground truth justifies) - these look identical from
+    flagging rate alone, so this reports true anomaly rate, precision, and
+    recall per group to tell the two apart.
+    """
+    df = pd.DataFrame(
+        {"group": group.to_numpy(), "y_true": y_true.to_numpy(), "flagged": flagged.to_numpy()}
+    )
+    rows = []
+    for name, sub in df.groupby("group", sort=True):
+        n = len(sub)
+        n_true_positive_actual = int(sub["y_true"].sum())
+        n_flagged = int(sub["flagged"].sum())
+        tp = int((sub["y_true"] & sub["flagged"]).sum())
+        rows.append(
+            {
+                "group": name,
+                "n": n,
+                "true_anomaly_rate": n_true_positive_actual / n if n else 0.0,
+                "flagging_rate": n_flagged / n if n else 0.0,
+                "precision": tp / n_flagged if n_flagged else 0.0,
+                "recall": tp / n_true_positive_actual if n_true_positive_actual else 0.0,
+            }
+        )
+    return pd.DataFrame(rows)

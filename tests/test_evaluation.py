@@ -4,7 +4,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from evaluation.fairness import flagging_rate_by_group, parity_tests_vs_reference
+from evaluation.fairness import (
+    flagging_rate_by_group,
+    parity_tests_vs_reference,
+    performance_by_group,
+)
+from evaluation.monitoring import population_stability_index, psi_report
+from evaluation.sensitivity import decision_flip_rate, feature_sensitivity, perturb_feature
 from evaluation.splits import expanding_window_splits, time_ordered_split
 from evaluation.stats import precision_confidence_interval, two_proportion_ztest
 from evaluation.threshold_tuning import rates_at_threshold, select_threshold_by_ztest
@@ -143,6 +149,142 @@ def test_parity_tests_vs_reference_raises_for_unknown_reference():
 
     with pytest.raises(ValueError, match="not present"):
         parity_tests_vs_reference(flagged, group, reference="does_not_exist")
+
+
+def test_performance_by_group_hand_crafted():
+    group = pd.Series(["a"] * 5)
+    y_true = pd.Series([True, True, False, False, False])
+    flagged = pd.Series([True, False, True, False, False])
+
+    result = performance_by_group(y_true, flagged, group).set_index("group")
+
+    assert result.loc["a", "n"] == 5
+    assert result.loc["a", "true_anomaly_rate"] == pytest.approx(2 / 5)
+    assert result.loc["a", "flagging_rate"] == pytest.approx(2 / 5)
+    assert result.loc["a", "precision"] == pytest.approx(0.5)  # 1 tp / 2 flagged
+    assert result.loc["a", "recall"] == pytest.approx(0.5)  # 1 tp / 2 actual positive
+
+
+def test_performance_by_group_reveals_bias_masked_by_equal_true_rate():
+    # both groups have the SAME true anomaly rate (20%) - so a flagging-rate
+    # disparity here can't be explained by "group b just has more anomalies",
+    # unlike a raw flagging-rate comparison would suggest without this check
+    group = pd.Series(["a"] * 10 + ["b"] * 10)
+    y_true = pd.Series([True] * 2 + [False] * 8 + [True] * 2 + [False] * 8)
+    # group a: flags exactly the 2 true anomalies (perfect precision/recall)
+    # group b: flags the 2 true anomalies AND 4 false ones (over-flagged)
+    flagged = pd.Series(
+        [True, True] + [False] * 8 + [True, True, True, True, True, True] + [False] * 4
+    )
+
+    result = performance_by_group(y_true, flagged, group).set_index("group")
+
+    assert result.loc["a", "true_anomaly_rate"] == pytest.approx(
+        result.loc["b", "true_anomaly_rate"]
+    )
+    assert result.loc["a", "recall"] == pytest.approx(1.0)
+    assert result.loc["b", "recall"] == pytest.approx(1.0)
+    # same underlying anomaly prevalence and same recall, but group b's
+    # precision is dragged down by extra false positives - a real disparity,
+    # not one explained away by "group b has more true anomalies"
+    assert result.loc["b", "precision"] < result.loc["a", "precision"]
+
+
+def test_perturb_feature_shifts_by_std_and_leaves_others_untouched():
+    X = pd.DataFrame({"a": [1.0, 2.0, 3.0, 4.0, 5.0], "b": [10.0, 10.0, 10.0, 10.0, 10.0]})
+    std_a = X["a"].std()
+
+    perturbed = perturb_feature(X, "a", delta_in_std=1.0)
+
+    assert perturbed["a"].to_numpy() == pytest.approx((X["a"] + std_a).to_numpy())
+    assert (perturbed["b"] == X["b"]).all()
+    assert (X["a"] == [1.0, 2.0, 3.0, 4.0, 5.0]).all()  # original untouched
+
+
+def test_feature_sensitivity_ranks_more_influential_feature_first():
+    rng = np.random.default_rng(0)
+    X = pd.DataFrame({"a": rng.normal(0, 1, 500), "b": rng.normal(0, 1, 500)})
+
+    def predict_fn(df: pd.DataFrame) -> np.ndarray:
+        return 5.0 * df["a"].to_numpy() + 0.1 * df["b"].to_numpy()
+
+    result = feature_sensitivity(predict_fn, X, ["a", "b"], delta_in_std=1.0)
+
+    assert result.iloc[0]["feature"] == "a"
+    by_feature = result.set_index("feature")
+    assert by_feature.loc["a", "mean_abs_delta_up"] > by_feature.loc["b", "mean_abs_delta_up"]
+
+
+def test_decision_flip_rate_zero_when_scores_never_cross_threshold():
+    X = pd.DataFrame({"a": [1.0, 2.0, 3.0]})
+
+    def predict_fn(df: pd.DataFrame) -> np.ndarray:
+        return np.full(len(df), 0.9)
+
+    flip_rate = decision_flip_rate(predict_fn, X, threshold=0.5, noise_std_frac=0.5)
+    assert flip_rate == 0.0
+
+
+def test_decision_flip_rate_positive_when_scores_sit_at_threshold():
+    X = pd.DataFrame({"a": np.linspace(4.9, 5.1, 1000)})
+
+    def predict_fn(df: pd.DataFrame) -> np.ndarray:
+        return df["a"].to_numpy()
+
+    flip_rate = decision_flip_rate(predict_fn, X, threshold=5.0, noise_std_frac=0.1)
+    assert 0.0 < flip_rate < 1.0
+
+
+def test_population_stability_index_near_zero_for_identical_distributions():
+    rng = np.random.default_rng(0)
+    baseline = rng.normal(0, 1, 5000)
+    same_dist = rng.normal(0, 1, 5000)
+
+    psi = population_stability_index(baseline, same_dist)
+    assert psi < 0.05
+
+
+def test_population_stability_index_handles_boolean_arrays():
+    # feature columns like is_round_amount arrive as bool dtype - np.quantile
+    # can't subtract booleans, so this would previously raise a TypeError
+    expected = np.array([True, False, False, False, False] * 200)
+    actual = np.array([True, True, False, False, False] * 200)
+
+    psi = population_stability_index(expected, actual)
+    assert psi >= 0.0
+
+
+def test_population_stability_index_high_for_shifted_distribution():
+    rng = np.random.default_rng(0)
+    baseline = rng.normal(0, 1, 5000)
+    shifted = rng.normal(3, 1, 5000)  # not a subtle shift
+
+    psi = population_stability_index(baseline, shifted)
+    assert psi > 0.25
+
+
+def test_psi_report_labels_stability_status_correctly():
+    rng = np.random.default_rng(0)
+    baseline = pd.DataFrame(
+        {
+            "stable_feature": rng.normal(0, 1, 5000),
+            "drifted_feature": rng.normal(0, 1, 5000),
+        }
+    )
+    current = pd.DataFrame(
+        {
+            "stable_feature": rng.normal(0, 1, 5000),
+            "drifted_feature": rng.normal(4, 1, 5000),
+        }
+    )
+    columns = ["stable_feature", "drifted_feature"]
+
+    result = psi_report(baseline, current, columns).set_index("feature")
+    assert result.loc["stable_feature", "stability_status"] == "stable"
+    assert result.loc["drifted_feature", "stability_status"] == "significant_shift"
+
+    ranked = psi_report(baseline, current, columns)
+    assert ranked.iloc[0]["feature"] == "drifted_feature"  # sorted by severity
 
 
 def test_select_threshold_by_ztest_prefers_lower_fp_at_equal_recall():

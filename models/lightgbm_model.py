@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import lightgbm as lgb
+import mlflow
+import mlflow.lightgbm
 import numpy as np
 import pandas as pd
 
@@ -26,6 +28,24 @@ def fit_lightgbm(
 
 def predict_proba_anomaly(model: lgb.LGBMClassifier, X: pd.DataFrame) -> np.ndarray:
     return model.predict_proba(X)[:, 1]
+
+
+def load_tuned_model_and_threshold(run_id: str) -> tuple[lgb.LGBMClassifier, float]:
+    """Loads a model + its capacity_threshold back from an MLflow run logged by
+    train_lightgbm.py, instead of re-running the 30-trial Optuna search that
+    produced it - any script that needs the real tuned model (fairness checks,
+    sensitivity analysis, ...) should go through this rather than refitting.
+    """
+    client = mlflow.MlflowClient()
+    mlflow_run = client.get_run(run_id)
+    threshold = float(mlflow_run.data.params["capacity_threshold"])
+    logged_model = next(
+        m
+        for m in client.search_logged_models(experiment_ids=[mlflow_run.info.experiment_id])
+        if m.source_run_id == run_id
+    )
+    model = mlflow.lightgbm.load_model(f"models:/{logged_model.model_id}")
+    return model, threshold
 
 
 def predict_shap_contributions(model: lgb.LGBMClassifier, X: pd.DataFrame) -> np.ndarray:
