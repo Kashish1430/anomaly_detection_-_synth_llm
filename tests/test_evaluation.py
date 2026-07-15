@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from evaluation.fairness import flagging_rate_by_group, parity_tests_vs_reference
 from evaluation.splits import expanding_window_splits, time_ordered_split
 from evaluation.stats import precision_confidence_interval, two_proportion_ztest
 from evaluation.threshold_tuning import rates_at_threshold, select_threshold_by_ztest
@@ -83,6 +84,65 @@ def test_rates_at_threshold_hand_crafted():
     assert result["fp"] == 1
     assert result["precision"] == pytest.approx(2 / 3)
     assert result["recall"] == pytest.approx(1.0)
+
+
+def test_flagging_rate_by_group_hand_crafted():
+    group = pd.Series(["retail", "retail", "retail", "retail", "sme", "sme"])
+    flagged = pd.Series([True, True, False, False, True, False])
+
+    result = flagging_rate_by_group(flagged, group).set_index("group")
+
+    assert result.loc["retail", "n"] == 4
+    assert result.loc["retail", "n_flagged"] == 2
+    assert result.loc["retail", "flagging_rate"] == pytest.approx(0.5)
+    assert result.loc["sme", "n"] == 2
+    assert result.loc["sme", "flagging_rate"] == pytest.approx(0.5)
+    # CI should bracket the point estimate for both groups
+    assert result.loc["retail", "ci_low"] < 0.5 < result.loc["retail", "ci_high"]
+
+
+def test_flagging_rate_by_group_ci_narrows_with_more_data():
+    small_group = pd.Series(["a"] * 20)
+    small_flagged = pd.Series([True] * 6 + [False] * 14)
+    large_group = pd.Series(["a"] * 20_000)
+    large_flagged = pd.Series([True] * 6_000 + [False] * 14_000)
+
+    small = flagging_rate_by_group(small_flagged, small_group).iloc[0]
+    large = flagging_rate_by_group(large_flagged, large_group).iloc[0]
+
+    assert (large["ci_high"] - large["ci_low"]) < (small["ci_high"] - small["ci_low"])
+
+
+def test_parity_tests_vs_reference_detects_a_real_difference():
+    # reference group flags 10%, "high" group flags 50% - not subtle
+    group = pd.Series(["reference"] * 1000 + ["high"] * 1000)
+    flagged = pd.Series([True] * 100 + [False] * 900 + [True] * 500 + [False] * 500)
+
+    result = parity_tests_vs_reference(flagged, group, reference="reference").set_index("group")
+
+    assert result.loc["high", "significant"]
+    assert result.loc["high", "p_value"] < 0.001
+    assert result.loc["high", "rate_diff"] == pytest.approx(0.4)
+    # the reference group itself should not appear as a comparison row
+    assert "reference" not in result.index
+
+
+def test_parity_tests_vs_reference_no_difference_is_not_significant():
+    group = pd.Series(["reference"] * 1000 + ["other"] * 1000)
+    flagged = pd.Series([True] * 100 + [False] * 900 + [True] * 102 + [False] * 898)
+
+    result = parity_tests_vs_reference(flagged, group, reference="reference").set_index("group")
+
+    assert not result.loc["other", "significant"]
+    assert result.loc["other", "p_value"] > 0.5
+
+
+def test_parity_tests_vs_reference_raises_for_unknown_reference():
+    group = pd.Series(["a", "b"])
+    flagged = pd.Series([True, False])
+
+    with pytest.raises(ValueError, match="not present"):
+        parity_tests_vs_reference(flagged, group, reference="does_not_exist")
 
 
 def test_select_threshold_by_ztest_prefers_lower_fp_at_equal_recall():

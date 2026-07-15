@@ -5,7 +5,9 @@ import pandas as pd
 from evaluation.stats import two_proportion_ztest, wilson_confidence_interval
 
 
-def flagging_rate_by_group(flagged: pd.Series, group: pd.Series, alpha: float = 0.05) -> pd.DataFrame:
+def flagging_rate_by_group(
+    flagged: pd.Series, group: pd.Series, alpha: float = 0.05
+) -> pd.DataFrame:
     """Statistical-parity check (PLAN.md §08): the model's flagging rate within
     each customer segment, with a Wilson confidence interval - the bias/fairness
     analogue of the precision CI in evaluation/stats.py, measuring P(flagged)
