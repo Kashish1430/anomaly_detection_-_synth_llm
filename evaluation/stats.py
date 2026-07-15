@@ -3,18 +3,23 @@ from __future__ import annotations
 from statsmodels.stats.proportion import proportion_confint, proportions_ztest
 
 
+def wilson_confidence_interval(count: int, n: int, alpha: float = 0.05) -> tuple[float, float]:
+    """Wilson score interval for a proportion count / n. Wilson rather than the
+    plain normal-approximation interval because the proportions here are often
+    close to the [0, 1] boundary with a modest sample size, where the normal
+    approximation is known to misbehave.
+    """
+    if n == 0:
+        return (0.0, 0.0)
+    lower, upper = proportion_confint(count, n, alpha=alpha, method="wilson")
+    return float(lower), float(upper)
+
+
 def precision_confidence_interval(
     n_flagged: int, n_true_positive: int, alpha: float = 0.05
 ) -> tuple[float, float]:
-    """Wilson score interval for precision = n_true_positive / n_flagged.
-    Wilson rather than the plain normal-approximation interval because
-    precision here is often close to the [0, 1] boundary with a modest
-    sample size, where the normal approximation is known to misbehave.
-    """
-    if n_flagged == 0:
-        return (0.0, 0.0)
-    lower, upper = proportion_confint(n_true_positive, n_flagged, alpha=alpha, method="wilson")
-    return float(lower), float(upper)
+    """Wilson score interval for precision = n_true_positive / n_flagged."""
+    return wilson_confidence_interval(n_true_positive, n_flagged, alpha=alpha)
 
 
 def two_proportion_ztest(count1: int, nobs1: int, count2: int, nobs2: int) -> tuple[float, float]:
