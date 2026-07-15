@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Literal
+from dotenv import load_dotenv
+
+load_dotenv()
 
 Provider = Literal["anthropic", "ollama"]
 

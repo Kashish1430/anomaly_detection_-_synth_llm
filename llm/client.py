@@ -126,6 +126,7 @@ class OpenAICompatibleClient(LLMClient):
         shap_values: dict[str, float],
         shap_base_value: float,
     ) -> tuple[ExplanationOutput, TokenUsage]:
+        
         schema = ExplanationOutput.model_json_schema()
         json_instructions = (
             "\n\nRespond with ONLY a single JSON object matching this schema, no other "
@@ -151,6 +152,7 @@ class OpenAICompatibleClient(LLMClient):
                 output_tokens=response.usage.completion_tokens if response.usage else 0,
             )
             try:
+                print(content)
                 return ExplanationOutput.model_validate_json(content), usage
             except (json.JSONDecodeError, ValidationError) as exc:
                 last_error = exc
