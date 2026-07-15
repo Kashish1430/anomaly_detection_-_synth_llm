@@ -19,7 +19,15 @@ Full plan, architecture, rationale, and week-by-week roadmap: **`PLAN.md`** (16 
 
 ## Current status
 
-**Phase: Week 4 in progress — `llm/` reasoning-layer package built (provider-agnostic client, structured output, fact-checker, cache, fallback), all tested. Real API smoke test still pending the Anthropic console account setup below.**
+**Phase: Week 5 in progress — bias/fairness check (`PLAN.md` §08) built and run against the real Week 3 tuned model. Week 4 is code-complete but still blocked on the Anthropic API key (see "Also still pending" under Next up).**
+
+- [x] `evaluation/fairness.py`: `flagging_rate_by_group` (Wilson-CI flagging rate per customer segment) and `parity_tests_vs_reference` (two-proportion z-test of each segment's flagging rate against a reference group) - reuses the same Wilson-CI/z-test machinery Week 3 built for threshold tuning, pointed at a different question (segment membership instead of threshold choice). Small supporting refactor to `evaluation/stats.py`: extracted a generic `wilson_confidence_interval(count, n)` so `precision_confidence_interval` and the new fairness code share one implementation instead of the fairness code misusing a precision-named function. 5 new tests in `tests/test_evaluation.py` (14 total in that file), all passing; ruff/black/mypy clean.
+- [x] `evaluation/run_fairness_check.py`: wires the fairness check up against the actual Week 3 tuned LightGBM model - loads it back from MLflow (run `e12a18e78ab144cea58c39d513d23007`, the run matching the reported 58.3% "after" precision) instead of re-running the 30-trial Optuna search; only the IsolationForest needed a quick, cheap refit (the original run didn't persist it, only the final LightGBM). Checks three groupings: `segment`, `declared_risk_rating`, and `country_risk_bucket` (derived from `home_country` vs. `data_sim/config.py`'s `HIGH_RISK_COUNTRIES`). Results written to `data/fairness_check_results.json`.
+- [x] **Real finding, needs discussion in the model validation report**: `segment` shows a large, statistically significant flagging-rate disparity - retail customers flagged at 4.03% vs. private_banking at 1.24% and sme at 0.70% (p≈3e-53 and p≈0 respectively, TEST set, n=182,990). By contrast, `declared_risk_rating` (low/medium/high) shows *no* significant disparity (~2.2% across all three, p>0.87) - so the model isn't simply mirroring the bank's own declared risk assessment. `country_risk_bucket` shows a significant but more explicable disparity (high-risk countries flagged at 5.13% vs. 2.20% standard, p≈9e-11), consistent with the intentionally-injected `geographic_risk` typology. The segment disparity is the one that actually needs investigation - not obviously justified by risk rating, and shouldn't be asserted away without checking why (e.g. does segment correlate with typology injection rates or transaction volume, or is this a genuine model bias?).
+- [ ] Not yet investigated: *why* retail is flagged so much more than sme/private_banking - candidate next step before writing the report's bias & fairness section.
+
+<details>
+<summary>Previously: Week 4 — Claude reasoning layer, provider-swap design, real Ollama test (click for detail)</summary>
 
 - [x] `llm/` built: `config.py` (`LLMConfig`, env-var driven provider selection), `schemas.py` (first Pydantic use in the repo — `ExplanationOutput` with the fixed typology enum), `prompts.py`, `client.py` (`LLMClient` ABC + `AnthropicClient` using native tool-use + `OpenAICompatibleClient` targeting Ollama/vLLM/LM Studio via the `openai` SDK, both behind one `get_llm_client()` factory), `fallback.py` (rule-based templated explanation), `fact_checker.py` (regex-based number cross-check against source data), `cache.py` (sqlite-backed local cache), `costs.py` (per-model pricing → running spend), `generate_explanations.py` (batch runner: assembles a sample of flagged transactions, concurrency-capped async calls, cache → fact-check → fallback, cost logging), `evaluate_typology_accuracy.py` (Haiku vs. Sonnet typology-agreement benchmark)
 - [x] 13 new tests (`test_llm.py`) using a `FakeClient` test double — factory provider-switch, schema validation, fact-checker true/mismatch cases, cache round-trip, fallback-on-failure, cache-write-on-success — plus one SHAP-additivity regression test added to `test_lightgbm.py` (`sum(contributions) + base_value == raw_margin`); 47 tests total, all passing; ruff/black/mypy clean; `llm` added to `make typecheck` scope
@@ -31,6 +39,8 @@ Full plan, architecture, rationale, and week-by-week roadmap: **`PLAN.md`** (16 
 - [ ] This dev machine has a separate, unresolved GPU issue (environment-specific, not a code issue): Ollama's Vulkan-based GPU discovery finds zero devices despite a working RTX 2060 (`nvidia-smi` sees it fine), and forcing `OLLAMA_LLM_LIBRARY=cuda_v12` + `OLLAMA_VULKAN=0` didn't fix it either - the CUDA backend also enumerates zero devices despite all its runtime DLLs being present. Likely a laptop Optimus/power-state quirk; not investigated further past this point. Ollama therefore runs on CPU only (~8-10 tok/s on an i7-9750H), which is why local Ollama testing is slow. Not a project blocker since Anthropic is the primary LLM path.
 - [ ] Anthropic API console account not yet set up — no real API call has been made yet; unit tests mock the client entirely, so this doesn't block development, but it blocks the real cost-logging smoke test and the Sonnet-accuracy benchmark
 - [ ] `.env` (gitignored) needs `ANTHROPIC_API_KEY` once the account exists; `.env.example` already documents all four env vars (`LLM_PROVIDER`, `ANTHROPIC_API_KEY`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`)
+
+</details>
 
 <details>
 <summary>Previously: Week 3 — LightGBM + Optuna + time-based CV + z-test threshold tuning (click for detail)</summary>
@@ -61,11 +71,18 @@ Checked whether this is target drift (anomaly rate or typology mix shifting acro
 
 ## Next up
 
-**Finish Week 4** (see `PLAN.md` §13 and §06): the `llm/` package, its provider-swap design, and the Ollama path have all now been tested for real (see Current status above) — what's left is entirely gated on a real Anthropic API key:
+**Continue Week 5** (see `PLAN.md` §08): the bias/fairness check is done (see Current status above) — remaining pieces before `docs/model_validation_report.md` can actually be written:
+
+1. Investigate the segment flagging-rate disparity found above (retail vs. sme/private_banking) - is it explained by something legitimate (differing typology injection rates, transaction volume, or amount distributions per segment) or a genuine model bias worth flagging plainly in the report? Don't assert an explanation without checking.
+2. Sensitivity analysis (feature perturbation) - `PLAN.md` §08.
+3. Ongoing monitoring plan - population stability index (PSI) thresholds, retraining triggers - `PLAN.md` §08.
+4. Assemble `docs/model_validation_report.md` itself, pulling together results from Weeks 2-5 (data lineage, development testing, backtesting, sensitivity analysis, baseline benchmarking, the bias/fairness results above, limitations, monitoring plan, governance sign-off template).
+
+**Also still pending, whenever the Anthropic API key is set up** (Week 4's last unmet piece - not blocking Week 5, can happen any time):
 
 1. Set up the Anthropic API console account (separate from Claude.ai Pro - see the binding decision above) and load a small credit balance.
 2. Add `ANTHROPIC_API_KEY` to a local `.env` (gitignored; `.env.example` has the template).
-3. Run `python -m llm.generate_explanations` for real against a small sample, confirm real explanations + a real logged cost (the Week 4 DoD's last unmet piece).
+3. Run `python -m llm.generate_explanations` for real against a small sample, confirm real explanations + a real logged cost.
 4. Run `python -m llm.evaluate_typology_accuracy` for the Haiku-vs-Sonnet typology-agreement number.
 
 Habit to keep: check the GitHub Actions tab right after every push, not just local test runs - local and CI already diverged once (empty-directory mypy behavior) and could again.
