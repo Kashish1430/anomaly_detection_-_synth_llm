@@ -24,6 +24,7 @@ dev = [
     "black>=24.0",
     "mypy>=1.9",
     "pre-commit>=3.7",
+    "httpx>=0.27",
 ]
 model = [
     "scikit-learn>=1.4",
@@ -80,6 +81,10 @@ filterwarnings = [
     # joblib's numpy_pickle sets `array.shape` internally when unpickling -
     # numpy 2.5 deprecation from inside joblib itself, not our code.
     "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning",
+    # starlette's TestClient importing httpx - an upstream transition, not
+    # something api/ code controls. StarletteDeprecationWarning subclasses
+    # UserWarning, not DeprecationWarning.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated:UserWarning",
 ]
 
 [build-system]

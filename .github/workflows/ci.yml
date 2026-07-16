@@ -17,7 +17,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install -e ".[dev,model]"
+        run: pip install -e ".[dev,model,llm,api]"
 
       - name: Lint (ruff)
         run: ruff check .
@@ -27,13 +27,13 @@ jobs:
 
       - name: Type check (mypy)
         # only packages that currently have source files - mypy errors out on an
-        # empty directory. Extend this list as llm/api/dashboard land.
-        run: mypy data_sim features models evaluation
+        # empty directory. Extend this list as dashboard lands.
+        run: mypy data_sim features models evaluation llm api
 
       - name: Test
         run: >-
           pytest -v --cov=data_sim --cov=features --cov=models --cov=evaluation
-          --cov-report=term-missing
+          --cov=llm --cov=api --cov-report=term-missing
 
       - name: Data simulator smoke test
         run: python -m data_sim.simulate --n-customers 300 --n-transactions 8000 --output-dir data/ci_smoke --seed 1
