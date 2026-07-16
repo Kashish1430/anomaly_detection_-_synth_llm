@@ -31,6 +31,7 @@ model = [
     "optuna>=3.6",
     "mlflow>=2.12",
     "statsmodels>=0.14",
+    "joblib>=1.4",
 ]
 llm = [
     "anthropic>=0.25",
@@ -76,6 +77,9 @@ filterwarnings = [
     # pandas 2.3.x / numpy 2.x internal concat path emits this for NaT handling
     # regardless of our code - not something we can fix from the caller side.
     "ignore:The 'generic' unit for NumPy timedelta is deprecated:DeprecationWarning",
+    # joblib's numpy_pickle sets `array.shape` internally when unpickling -
+    # numpy 2.5 deprecation from inside joblib itself, not our code.
+    "ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning",
 ]
 
 [build-system]
