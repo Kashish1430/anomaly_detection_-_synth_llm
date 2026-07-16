@@ -6,13 +6,22 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 
 from api.config import ApiConfig
+from api.explain import explain_transaction
 from api.model_bundle import load_bundle, score_features
-from api.schemas import HealthResponse, ScoreRequest, ScoreResponse
+from api.schemas import (
+    ExplainRequest,
+    ExplainResponse,
+    HealthResponse,
+    ScoreRequest,
+    ScoreResponse,
+)
+from llm.config import LLMConfig
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
 config = ApiConfig.from_env()
+llm_config = LLMConfig.from_env()
 
 
 @asynccontextmanager
@@ -64,4 +73,21 @@ def score(request: ScoreRequest) -> ScoreResponse:
         anomaly_probability=proba,
         is_flagged=is_flagged,
         threshold=bundle["capacity_threshold"],
+    )
+
+
+@app.post("/explain", response_model=ExplainResponse)
+async def explain(request: ExplainRequest) -> ExplainResponse:
+    bundle = _load_bundle_or_503()
+    explanation, used_llm, fact_check_passed = await explain_transaction(
+        bundle, llm_config, request.transaction, request.features
+    )
+    return ExplainResponse(
+        transaction_id=request.transaction_id,
+        explanation=explanation.explanation,
+        typology=explanation.typology,
+        confidence=explanation.confidence,
+        likely_false_positive=explanation.likely_false_positive,
+        source="llm" if used_llm else "fallback",
+        fact_check_passed=fact_check_passed,
     )

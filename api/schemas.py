@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
+
+from llm.schemas import Typology
 
 
 class TransactionFeatures(BaseModel):
@@ -47,3 +51,23 @@ class HealthResponse(BaseModel):
     status: str
     model_run_id: str
     model_packaged_at: str
+
+
+class ExplainRequest(BaseModel):
+    transaction_id: str
+    # Raw transaction context for the prompt (amount, channel, counterparty,
+    # country, ...) - deliberately not a fixed schema since llm/prompts.py just
+    # formats whatever keys are present, the same way llm/generate_explanations.py
+    # passes through a flexible row of columns.
+    transaction: dict[str, Any]
+    features: TransactionFeatures
+
+
+class ExplainResponse(BaseModel):
+    transaction_id: str
+    explanation: str
+    typology: Typology
+    confidence: float = Field(ge=0.0, le=1.0)
+    likely_false_positive: bool
+    source: Literal["llm", "fallback"]
+    fact_check_passed: bool | None = None

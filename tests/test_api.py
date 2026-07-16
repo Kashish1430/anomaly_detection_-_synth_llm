@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 
 from data_sim.config import SimConfig
 from data_sim.simulate import run as simulate_run
+from llm.costs import TokenUsage
+from llm.schemas import ExplanationOutput
 from models.lightgbm_model import fit_lightgbm
 from models.package_artifact import LGBM_FEATURE_COLUMNS, build_bundle
 
@@ -106,3 +108,87 @@ def test_health_returns_503_when_bundle_missing(tmp_path):
     with TestClient(api_main.app) as client:
         response = client.get("/health")
         assert response.status_code == 503
+
+
+class _FakeClient:
+    """Mirrors tests/test_llm.py's _FakeClient test double - stands in for
+    AnthropicClient/OpenAICompatibleClient without any real network call."""
+
+    def __init__(self, explanation=None, raises: bool = False) -> None:
+        self.model_name = "fake-model"
+        self._explanation = explanation
+        self._raises = raises
+
+    async def generate_explanation(self, transaction, features, shap_values, shap_base_value):
+        if self._raises:
+            raise RuntimeError("simulated LLM failure (e.g. missing API key / Ollama down)")
+        return self._explanation, TokenUsage(input_tokens=10, output_tokens=10)
+
+
+SAMPLE_TRANSACTION = {
+    "amount": 9000.0,
+    "direction": "debit",
+    "channel": "online",
+    "counterparty_country": "PA",
+}
+
+
+def test_explain_falls_back_when_llm_call_fails(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr("api.explain.get_llm_client", lambda config: _FakeClient(raises=True))
+
+    with TestClient(api_main.app) as client:
+        response = client.post(
+            "/explain",
+            json={
+                "transaction_id": "txn-1",
+                "transaction": SAMPLE_TRANSACTION,
+                "features": SAMPLE_FEATURES,
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "fallback"
+    assert "fallback" in body["explanation"].lower()
+    assert body["fact_check_passed"] is None
+
+
+def test_explain_returns_llm_explanation_when_call_succeeds(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    fake_explanation = ExplanationOutput(
+        explanation="This transaction of 9000.0 is a first payment to a new counterparty.",
+        typology="layering",
+        confidence=0.8,
+        likely_false_positive=False,
+    )
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(
+        "api.explain.get_llm_client",
+        lambda config: _FakeClient(explanation=fake_explanation),
+    )
+
+    with TestClient(api_main.app) as client:
+        response = client.post(
+            "/explain",
+            json={
+                "transaction_id": "txn-1",
+                "transaction": SAMPLE_TRANSACTION,
+                "features": SAMPLE_FEATURES,
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "llm"
+    assert body["typology"] == "layering"
+    assert body["fact_check_passed"] is True
