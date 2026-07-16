@@ -126,7 +126,7 @@ class OpenAICompatibleClient(LLMClient):
         shap_values: dict[str, float],
         shap_base_value: float,
     ) -> tuple[ExplanationOutput, TokenUsage]:
-        
+
         schema = ExplanationOutput.model_json_schema()
         json_instructions = (
             "\n\nRespond with ONLY a single JSON object matching this schema, no other "
