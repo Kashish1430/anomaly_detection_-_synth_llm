@@ -1,4 +1,4 @@
-.PHONY: install simulate test lint format typecheck check db-up db-down serve load-data
+.PHONY: install simulate test lint format typecheck check db-up db-down serve load-data dashboard
 
 install:
 	pip install -e ".[dev,model,llm,api,dashboard]"
@@ -21,6 +21,9 @@ load-data:
 serve:
 	python -m api.serve
 
+dashboard:
+	streamlit run dashboard/app.py
+
 simulate:
 	python -m data_sim.simulate
 
@@ -37,9 +40,7 @@ format:
 	black .
 	ruff check --fix .
 
-# mypy errors on a directory with no .py files - only list packages that exist
-# with source in them yet; extend as dashboard lands.
 typecheck:
-	mypy data_sim features models evaluation llm api
+	mypy data_sim features models evaluation llm api dashboard
 
 check: lint typecheck test

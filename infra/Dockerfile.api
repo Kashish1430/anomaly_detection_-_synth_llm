@@ -1,0 +1,31 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# lightgbm links against libgomp (OpenMP) at import time - not present in the
+# slim base image (unlike the full python:3.12 image or a typical dev
+# machine), so importing it fails with "libgomp.so.1: cannot open shared
+# object file" without this.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Only the source the api/explain/model-bundle-loading path actually imports -
+# not tests/, notebooks/, dashboard/, or the raw data/mlruns dirs (those are
+# volume-mounted at runtime, not baked into the image; see docker-compose.yml).
+COPY pyproject.toml README.md ./
+COPY api ./api
+COPY models ./models
+COPY features ./features
+COPY evaluation ./evaluation
+COPY llm ./llm
+COPY data_sim ./data_sim
+
+RUN pip install --no-cache-dir -e ".[api,model,llm]"
+
+EXPOSE 8000
+
+# Plain uvicorn, not api/serve.py's Windows workaround - Linux has no
+# ProactorEventLoop/SelectorEventLoop split, so the bug that script exists for
+# doesn't apply inside this container.
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

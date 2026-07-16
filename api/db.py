@@ -48,3 +48,25 @@ async def get_transaction(pool: AsyncConnectionPool, transaction_id: str) -> dic
             (transaction_id,),
         )
         return await cur.fetchone()
+
+
+async def insert_feedback(
+    pool: AsyncConnectionPool, transaction_id: str, verdict: str, note: str | None
+) -> dict[str, Any]:
+    """Inserts one investigator verdict. Callers should check the transaction
+    exists first (api/main.py does, via get_transaction) rather than relying on
+    the table's foreign key to reject it - a 404 is a clearer response than a
+    500 from an unhandled ForeignKeyViolation.
+    """
+    async with pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            INSERT INTO investigator_feedback (transaction_id, verdict, note)
+            VALUES (%s, %s, %s)
+            RETURNING id, transaction_id, verdict, note, submitted_at
+            """,
+            (transaction_id, verdict, note),
+        )
+        row = await cur.fetchone()
+        assert row is not None
+        return row

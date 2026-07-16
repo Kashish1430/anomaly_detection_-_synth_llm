@@ -237,6 +237,58 @@ def test_transaction_detail_endpoint_found(tmp_path, monkeypatch):
     assert response.json()["transaction_id"] == "txn-db-1"
 
 
+async def _fake_insert_feedback(pool, transaction_id, verdict, note):
+    return {
+        "id": 1,
+        "transaction_id": transaction_id,
+        "verdict": verdict,
+        "note": note,
+        "submitted_at": datetime(2025, 1, 2, tzinfo=UTC),
+    }
+
+
+def test_submit_feedback_endpoint(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "get_transaction", _fake_get_transaction)
+    monkeypatch.setattr(api_main, "insert_feedback", _fake_insert_feedback)
+
+    with TestClient(api_main.app) as client:
+        response = client.post(
+            "/transactions/txn-db-1/feedback",
+            json={"verdict": "false_positive", "note": "customer confirmed, benign"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["transaction_id"] == "txn-db-1"
+    assert body["verdict"] == "false_positive"
+    assert body["note"] == "customer confirmed, benign"
+
+
+def test_submit_feedback_404_for_unknown_transaction(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "get_transaction", _fake_get_transaction)
+    monkeypatch.setattr(api_main, "insert_feedback", _fake_insert_feedback)
+
+    with TestClient(api_main.app) as client:
+        response = client.post(
+            "/transactions/does-not-exist/feedback",
+            json={"verdict": "true_positive"},
+        )
+
+    assert response.status_code == 404
+
+
 def test_transaction_detail_endpoint_404(tmp_path, monkeypatch):
     bundle_path = _write_bundle(tmp_path, monkeypatch)
 

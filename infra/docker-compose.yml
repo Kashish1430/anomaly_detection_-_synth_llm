@@ -22,5 +22,55 @@ services:
       retries: 5
     restart: unless-stopped
 
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    container_name: anomaly-detection-api
+    # Host secrets/LLM config (ANTHROPIC_API_KEY, LLM_PROVIDER, ...) - copy
+    # .env.example to ../.env first if it doesn't exist yet. Note: if
+    # LLM_PROVIDER=ollama, OLLAMA_BASE_URL must be reachable *from inside this
+    # container* - `localhost` there means the container itself, not the host
+    # running Ollama. On Docker Desktop (Windows/Mac), use
+    # http://host.docker.internal:11434/v1 instead. Anthropic doesn't have
+    # this problem - it's a real external host either way.
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-anomaly}:${POSTGRES_PASSWORD:-anomaly}@postgres:5432/${POSTGRES_DB:-anomaly_detection}
+      MODEL_BUNDLE_PATH: /app/artifacts/model_bundle.joblib
+    volumes:
+      # trained artifacts/data are generated locally (make simulate,
+      # models/package_artifact.py), not baked into the image - see PLAN.md
+      # §09 on why they aren't committed to git either.
+      - ../artifacts:/app/artifacts:ro
+      - ../data/simulated:/app/data/simulated:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.dashboard
+    container_name: anomaly-detection-dashboard
+    environment:
+      API_BASE_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:

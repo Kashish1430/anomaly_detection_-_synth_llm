@@ -55,6 +55,8 @@ api = [
 ]
 dashboard = [
     "streamlit>=1.33",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
 ]
 
 [tool.ruff]
@@ -93,4 +95,4 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["data_sim*", "features*", "models*", "llm*", "evaluation*", "api*"]
+include = ["data_sim*", "features*", "models*", "llm*", "evaluation*", "api*", "dashboard*"]

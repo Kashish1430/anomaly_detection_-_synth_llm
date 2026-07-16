@@ -17,7 +17,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install -e ".[dev,model,llm,api]"
+        run: pip install -e ".[dev,model,llm,api,dashboard]"
 
       - name: Lint (ruff)
         run: ruff check .
@@ -26,9 +26,7 @@ jobs:
         run: black --check .
 
       - name: Type check (mypy)
-        # only packages that currently have source files - mypy errors out on an
-        # empty directory. Extend this list as dashboard lands.
-        run: mypy data_sim features models evaluation llm api
+        run: mypy data_sim features models evaluation llm api dashboard
 
       - name: Test
         run: >-

@@ -75,6 +75,22 @@ class ExplainResponse(BaseModel):
     fact_check_passed: bool | None = None
 
 
+Verdict = Literal["true_positive", "false_positive", "needs_review"]
+
+
+class FeedbackRequest(BaseModel):
+    verdict: Verdict
+    note: str | None = None
+
+
+class FeedbackResponse(BaseModel):
+    id: int
+    transaction_id: str
+    verdict: Verdict
+    note: str | None
+    submitted_at: datetime
+
+
 class TransactionResponse(BaseModel):
     """A row from Postgres's `transactions` table (infra/db/schema.sql) - the
     dashboard's browsable, flagged-transaction universe, loaded once offline by
