@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: anomaly-detection-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-anomaly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-anomaly}
+      POSTGRES_DB: ${POSTGRES_DB:-anomaly_detection}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # postgres's entrypoint runs every .sql file here, in name order, but
+      # only against a freshly-initialized (empty) data volume - not on every
+      # restart. Drop the volume (`docker compose down -v`) to re-apply schema
+      # changes during local development.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-anomaly} -d ${POSTGRES_DB:-anomaly_detection}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

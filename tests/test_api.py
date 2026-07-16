@@ -1,15 +1,32 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import joblib
 import pandas as pd
+import pytest
 from fastapi.testclient import TestClient
 
+from api.db import open_pool
 from data_sim.config import SimConfig
 from data_sim.simulate import run as simulate_run
 from llm.costs import TokenUsage
 from llm.schemas import ExplanationOutput
 from models.lightgbm_model import fit_lightgbm
 from models.package_artifact import LGBM_FEATURE_COLUMNS, build_bundle
+
+
+@pytest.fixture(autouse=True)
+def _fresh_pool(monkeypatch):
+    # api.main's `pool` is a process-lifetime singleton in production (opened
+    # once, closed once) - but psycopg_pool pools can't reopen after closing,
+    # and every test's `with TestClient(...)` cycles the lifespan (open+close)
+    # against whatever pool object api.main currently holds. Swap in a fresh,
+    # never-yet-opened pool per test so tests can run in any order/count.
+    import api.main as api_main
+
+    monkeypatch.setattr(api_main, "pool", open_pool(api_main.config.database_url))
+
 
 SAMPLE_FEATURES = {
     "velocity_count_1h": 1.0,
@@ -157,6 +174,82 @@ def test_explain_falls_back_when_llm_call_fails(tmp_path, monkeypatch):
     assert body["source"] == "fallback"
     assert "fallback" in body["explanation"].lower()
     assert body["fact_check_passed"] is None
+
+
+SAMPLE_DB_ROW = {
+    "transaction_id": "txn-db-1",
+    "customer_id": "cust-1",
+    "timestamp": datetime(2025, 1, 1, tzinfo=UTC),
+    "amount": 500.0,
+    "direction": "debit",
+    "channel": "online",
+    "counterparty_id": "cp-1",
+    "counterparty_country": "GB",
+    "is_cross_border": False,
+    "features": SAMPLE_FEATURES,
+    "anomaly_probability": 0.91,
+    "is_flagged": True,
+    "is_anomalous": True,
+    "typology": "layering",
+}
+
+
+async def _fake_list_flagged_transactions(pool, limit=50):
+    return [SAMPLE_DB_ROW]
+
+
+async def _fake_get_transaction(pool, transaction_id):
+    return SAMPLE_DB_ROW if transaction_id == "txn-db-1" else None
+
+
+def test_list_transactions_endpoint(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "list_flagged_transactions", _fake_list_flagged_transactions)
+
+    with TestClient(api_main.app) as client:
+        response = client.get("/transactions?limit=1")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["transaction_id"] == "txn-db-1"
+    assert body[0]["features"]["is_new_counterparty"] is False
+
+
+def test_transaction_detail_endpoint_found(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "get_transaction", _fake_get_transaction)
+
+    with TestClient(api_main.app) as client:
+        response = client.get("/transactions/txn-db-1")
+
+    assert response.status_code == 200
+    assert response.json()["transaction_id"] == "txn-db-1"
+
+
+def test_transaction_detail_endpoint_404(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "get_transaction", _fake_get_transaction)
+
+    with TestClient(api_main.app) as client:
+        response = client.get("/transactions/does-not-exist")
+
+    assert response.status_code == 404
 
 
 def test_explain_returns_llm_explanation_when_call_succeeds(tmp_path, monkeypatch):

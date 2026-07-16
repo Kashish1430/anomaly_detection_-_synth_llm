@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -9,10 +10,11 @@ from llm.schemas import Typology
 
 class TransactionFeatures(BaseModel):
     """The 18 engineered features `features.pipeline.FEATURE_COLUMNS` produces for
-    one transaction. The skeleton inference endpoint takes these pre-computed
-    rather than a raw transaction, since several of them (velocity, peer
-    z-score) need a customer's transaction history to compute - that lookup is
-    Postgres's job once it's wired in, not this endpoint's.
+    one transaction. /score and /explain take these pre-computed rather than a
+    raw transaction, since several of them (velocity, peer z-score) need a
+    customer's transaction history to compute - api/load_data.py does that
+    offline, in bulk, against the TEST split, rather than this endpoint
+    computing it live per request.
     """
 
     velocity_count_1h: float
@@ -71,3 +73,25 @@ class ExplainResponse(BaseModel):
     likely_false_positive: bool
     source: Literal["llm", "fallback"]
     fact_check_passed: bool | None = None
+
+
+class TransactionResponse(BaseModel):
+    """A row from Postgres's `transactions` table (infra/db/schema.sql) - the
+    dashboard's browsable, flagged-transaction universe, loaded once offline by
+    api/load_data.py rather than computed on the fly.
+    """
+
+    transaction_id: str
+    customer_id: str
+    timestamp: datetime
+    amount: float
+    direction: str
+    channel: str
+    counterparty_id: str | None
+    counterparty_country: str | None
+    is_cross_border: bool
+    features: TransactionFeatures
+    anomaly_probability: float = Field(ge=0.0, le=1.0)
+    is_flagged: bool
+    is_anomalous: bool | None
+    typology: str | None

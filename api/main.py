@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 
 from api.config import ApiConfig
+from api.db import get_transaction, list_flagged_transactions, open_pool
 from api.explain import explain_transaction
 from api.model_bundle import load_bundle, score_features
 from api.schemas import (
@@ -14,6 +15,7 @@ from api.schemas import (
     HealthResponse,
     ScoreRequest,
     ScoreResponse,
+    TransactionResponse,
 )
 from llm.config import LLMConfig
 
@@ -22,6 +24,7 @@ log = logging.getLogger(__name__)
 
 config = ApiConfig.from_env()
 llm_config = LLMConfig.from_env()
+pool = open_pool(config.database_url)
 
 
 @asynccontextmanager
@@ -35,7 +38,15 @@ async def lifespan(app: FastAPI):
         log.info("Model bundle loaded from %s", config.model_bundle_path)
     except FileNotFoundError as exc:
         log.warning("%s", exc)
+
+    # wait=False (the default): returns immediately and retries connecting in
+    # the background, so a not-yet-reachable Postgres doesn't crash startup -
+    # /transactions just fails per-request until it's up, same philosophy as
+    # the model bundle above.
+    await pool.open()
+    log.info("Postgres pool opened for %s", config.database_url)
     yield
+    await pool.close()
 
 
 app = FastAPI(
@@ -91,3 +102,17 @@ async def explain(request: ExplainRequest) -> ExplainResponse:
         source="llm" if used_llm else "fallback",
         fact_check_passed=fact_check_passed,
     )
+
+
+@app.get("/transactions", response_model=list[TransactionResponse])
+async def transactions(limit: int = 50) -> list[TransactionResponse]:
+    rows = await list_flagged_transactions(pool, limit=min(limit, 500))
+    return [TransactionResponse.model_validate(row) for row in rows]
+
+
+@app.get("/transactions/{transaction_id}", response_model=TransactionResponse)
+async def transaction_detail(transaction_id: str) -> TransactionResponse:
+    row = await get_transaction(pool, transaction_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"transaction {transaction_id!r} not found")
+    return TransactionResponse.model_validate(row)
