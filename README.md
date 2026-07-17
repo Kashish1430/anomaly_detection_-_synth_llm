@@ -44,3 +44,7 @@ See `PLAN.md` §09 for the full structure and rationale. Top level:
 - `dashboard/` — Streamlit investigator triage UI
 - `docs/` — model validation report, architecture notes, ADRs
 - `infra/` — Docker Compose, Dockerfiles, Nginx config
+
+## Scaling beyond a single box
+
+The live demo runs on one EC2 instance (Docker Compose, self-hosted Postgres) by design, not by oversight — see [`docs/architecture.md`](docs/architecture.md#scaling-this-further-not-implemented--out-of-scope) for the Auto Scaling Group / RDS / ALB path this would take under real load, and why it isn't built here (a production-scale architecture costs roughly $60–100+/month just to exist, before serving any traffic — not justified for a portfolio demo).

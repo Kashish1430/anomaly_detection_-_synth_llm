@@ -1,4 +1,4 @@
-.PHONY: install simulate test lint format typecheck check db-up db-down serve load-data dashboard
+.PHONY: install simulate test lint format typecheck check db-up db-down serve load-data export-scored-sample dashboard
 
 install:
 	pip install -e ".[dev,model,llm,api,dashboard]"
@@ -10,9 +10,16 @@ db-up:
 db-down:
 	docker compose -f infra/docker-compose.yml down
 
-# Loads the tuned model's flagged TEST-split transactions into Postgres -
-# run once after db-up and after models/package_artifact.py has produced
-# artifacts/model_bundle.joblib.
+# Scores the TEST split with the tuned model and writes a small pre-scored
+# sample to data/scored_sample/ - the heavy step (full 1.2M-row dataset,
+# model inference), meant to run locally/offline, not on the serving box.
+# Run once after models/package_artifact.py has produced artifacts/model_bundle.joblib.
+export-scored-sample:
+	python -m api.export_scored_sample
+
+# Loads the pre-scored sample (data/scored_sample/, see export-scored-sample)
+# into Postgres. Deliberately does no scoring itself - safe to run on a small
+# box. Run once after db-up.
 load-data:
 	python -m api.load_data
 

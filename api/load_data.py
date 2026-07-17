@@ -10,7 +10,6 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from api.config import ApiConfig
-from api.model_bundle import load_bundle
 from evaluation.splits import time_ordered_split
 from features.pipeline import FEATURE_COLUMNS, build_feature_table
 from models.baseline import score_anomaly
@@ -70,8 +69,12 @@ def build_scored_flagged_transactions(
     flagged = test[test["is_flagged"]].reset_index(drop=True)
     # pandas' own JSON serializer, not a manual dict conversion - engineered
     # feature columns are a mix of numpy float64/bool_/int32, none of which
-    # `json.dumps` (used by Jsonb below) can serialize directly.
-    flagged["features"] = json.loads(flagged[FEATURE_COLUMNS].to_json(orient="records"))
+    # `json.dumps` (used by Jsonb below) can serialize directly. Stored as a
+    # per-row JSON *string* (not a parsed dict) so this frame round-trips
+    # through parquet cleanly in export_scored_sample.py - see
+    # _transaction_row_to_tuple, which parses it back before Jsonb-wrapping.
+    records = json.loads(flagged[FEATURE_COLUMNS].to_json(orient="records"))
+    flagged["features"] = [json.dumps(r) for r in records]
     return flagged
 
 
@@ -90,7 +93,7 @@ def _transaction_row_to_tuple(row: pd.Series) -> tuple:
         _none_if_nan(row["counterparty_id"]),
         _none_if_nan(row["counterparty_country"]),
         bool(row["is_cross_border"]),
-        Jsonb(row["features"]),
+        Jsonb(json.loads(row["features"])),
         float(row["anomaly_probability"]),
         bool(row["is_flagged"]),
         bool(row["is_anomalous"]),
@@ -127,23 +130,20 @@ def load_into_postgres(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Score the TEST split with the tuned model and load the flagged "
-        "transactions into Postgres for the dashboard to browse (PLAN.md §02, §11)."
+        description="Load a pre-scored sample (see export_scored_sample.py) into Postgres "
+        "for the dashboard to browse (PLAN.md §02, §11). Deliberately does no scoring "
+        "itself - merging/sorting the full dataset and running model inference is heavy "
+        "enough that it doesn't belong on the small serving box; that happens once, "
+        "offline, via export_scored_sample.py, same as training does."
     )
-    parser.add_argument("--data-dir", type=str, default="data/simulated")
-    parser.add_argument("--train-frac", type=float, default=0.7)
-    parser.add_argument("--val-frac", type=float, default=0.15)
+    parser.add_argument("--scored-dir", type=str, default="data/scored_sample")
     args = parser.parse_args()
 
     config = ApiConfig.from_env()
-    bundle = load_bundle(config.model_bundle_path)
-
-    data_dir = Path(args.data_dir)
-    customers = pd.read_parquet(data_dir / "customers.parquet")
-    flagged = build_scored_flagged_transactions(
-        data_dir, bundle, train_frac=args.train_frac, val_frac=args.val_frac
-    )
-    log.info("Scored TEST split: %d flagged transactions to load", len(flagged))
+    scored_dir = Path(args.scored_dir)
+    customers = pd.read_parquet(scored_dir / "customers.parquet")
+    flagged = pd.read_parquet(scored_dir / "flagged_transactions.parquet")
+    log.info("Loaded pre-scored sample: %d flagged transactions to insert", len(flagged))
 
     load_into_postgres(config.database_url, customers, flagged)
     log.info(
