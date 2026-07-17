@@ -45,6 +45,7 @@ services:
       # §09 on why they aren't committed to git either.
       - ../artifacts:/app/artifacts:ro
       - ../data/simulated:/app/data/simulated:ro
+      - ../data/scored_sample:/app/data/scored_sample:ro
     ports:
       - "8000:8000"
     depends_on:
