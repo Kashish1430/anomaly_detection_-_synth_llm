@@ -73,3 +73,7 @@ def submit_feedback(base_url: str, transaction_id: str, verdict: str, note: str 
         f"/transactions/{transaction_id}/feedback",
         json={"verdict": verdict, "note": note},
     )
+
+
+def list_feedback(base_url: str, transaction_id: str) -> list[dict]:
+    return _request("GET", base_url, f"/transactions/{transaction_id}/feedback")

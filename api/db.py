@@ -50,6 +50,20 @@ async def get_transaction(pool: AsyncConnectionPool, transaction_id: str) -> dic
         return await cur.fetchone()
 
 
+async def list_feedback(pool: AsyncConnectionPool, transaction_id: str) -> list[dict[str, Any]]:
+    async with pool.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(
+            """
+            SELECT id, transaction_id, verdict, note, submitted_at
+            FROM investigator_feedback
+            WHERE transaction_id = %s
+            ORDER BY submitted_at DESC
+            """,
+            (transaction_id,),
+        )
+        return await cur.fetchall()
+
+
 async def insert_feedback(
     pool: AsyncConnectionPool, transaction_id: str, verdict: str, note: str | None
 ) -> dict[str, Any]:

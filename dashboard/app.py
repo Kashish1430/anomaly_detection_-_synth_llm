@@ -8,6 +8,7 @@ from dashboard.api_client import (
     explain_transaction,
     get_health,
     get_transaction,
+    list_feedback,
     list_transactions,
     submit_feedback,
 )
@@ -130,6 +131,22 @@ if selected_id:
             )
 
     st.markdown("### Investigator feedback")
+    try:
+        existing_feedback = list_feedback(api_base_url, selected_id)
+    except ApiError as exc:
+        st.error(str(exc))
+        existing_feedback = []
+
+    if existing_feedback:
+        st.write("**Previously recorded:**")
+        for entry in existing_feedback:
+            line = f"- `{entry['verdict']}` at {entry['submitted_at']}"
+            if entry["note"]:
+                line += f" — {entry['note']}"
+            st.write(line)
+    else:
+        st.caption("No feedback recorded yet for this transaction.")
+
     with st.form(key=f"feedback-form-{selected_id}"):
         verdict = st.radio(
             "Verdict", ["true_positive", "false_positive", "needs_review"], horizontal=True
@@ -139,5 +156,6 @@ if selected_id:
             try:
                 submit_feedback(api_base_url, selected_id, verdict, note or None)
                 st.success("Feedback recorded.")
+                st.rerun()
             except ApiError as exc:
                 st.error(str(exc))

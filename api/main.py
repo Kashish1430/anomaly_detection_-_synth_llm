@@ -6,7 +6,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 
 from api.config import ApiConfig
-from api.db import get_transaction, insert_feedback, list_flagged_transactions, open_pool
+from api.db import (
+    get_transaction,
+    insert_feedback,
+    list_feedback,
+    list_flagged_transactions,
+    open_pool,
+)
 from api.explain import explain_transaction
 from api.model_bundle import load_bundle, score_features
 from api.schemas import (
@@ -126,3 +132,11 @@ async def submit_feedback(transaction_id: str, request: FeedbackRequest) -> Feed
         raise HTTPException(status_code=404, detail=f"transaction {transaction_id!r} not found")
     row = await insert_feedback(pool, transaction_id, request.verdict, request.note)
     return FeedbackResponse.model_validate(row)
+
+
+@app.get("/transactions/{transaction_id}/feedback", response_model=list[FeedbackResponse])
+async def get_feedback(transaction_id: str) -> list[FeedbackResponse]:
+    if await get_transaction(pool, transaction_id) is None:
+        raise HTTPException(status_code=404, detail=f"transaction {transaction_id!r} not found")
+    rows = await list_feedback(pool, transaction_id)
+    return [FeedbackResponse.model_validate(row) for row in rows]

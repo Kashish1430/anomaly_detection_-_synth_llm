@@ -289,6 +289,76 @@ def test_submit_feedback_404_for_unknown_transaction(tmp_path, monkeypatch):
     assert response.status_code == 404
 
 
+async def _fake_list_feedback(pool, transaction_id):
+    if transaction_id != "txn-db-1":
+        return []
+    return [
+        {
+            "id": 1,
+            "transaction_id": "txn-db-1",
+            "verdict": "true_positive",
+            "note": "confirmed fraud",
+            "submitted_at": datetime(2025, 1, 2, tzinfo=UTC),
+        }
+    ]
+
+
+def test_get_feedback_endpoint_returns_recorded_entries(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "get_transaction", _fake_get_transaction)
+    monkeypatch.setattr(api_main, "list_feedback", _fake_list_feedback)
+
+    with TestClient(api_main.app) as client:
+        response = client.get("/transactions/txn-db-1/feedback")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["verdict"] == "true_positive"
+    assert body[0]["note"] == "confirmed fraud"
+
+
+def test_get_feedback_endpoint_empty_list_when_none_recorded(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    async def _fake_get_transaction_other(pool, transaction_id):
+        return SAMPLE_DB_ROW if transaction_id == "txn-db-2" else None
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "get_transaction", _fake_get_transaction_other)
+    monkeypatch.setattr(api_main, "list_feedback", _fake_list_feedback)
+
+    with TestClient(api_main.app) as client:
+        response = client.get("/transactions/txn-db-2/feedback")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_get_feedback_endpoint_404_for_unknown_transaction(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "get_transaction", _fake_get_transaction)
+    monkeypatch.setattr(api_main, "list_feedback", _fake_list_feedback)
+
+    with TestClient(api_main.app) as client:
+        response = client.get("/transactions/does-not-exist/feedback")
+
+    assert response.status_code == 404
+
+
 def test_transaction_detail_endpoint_404(tmp_path, monkeypatch):
     bundle_path = _write_bundle(tmp_path, monkeypatch)
 
