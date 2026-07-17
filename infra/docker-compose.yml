@@ -23,6 +23,11 @@ services:
     restart: unless-stopped
 
   api:
+    # image: lets the EC2 box `docker compose pull` a pre-built image from
+    # GHCR (built once, in CI - see .github/workflows/deploy.yml) instead of
+    # building on the box itself; build: is kept alongside so local dev
+    # (`docker compose up -d --build`) is unaffected.
+    image: ghcr.io/kashish1430/anomaly-detection-api:latest
     build:
       context: ..
       dockerfile: infra/Dockerfile.api
@@ -60,6 +65,7 @@ services:
     restart: unless-stopped
 
   dashboard:
+    image: ghcr.io/kashish1430/anomaly-detection-dashboard:latest
     build:
       context: ..
       dockerfile: infra/Dockerfile.dashboard

@@ -1,0 +1,70 @@
+name: Deploy
+
+# Gated on CI succeeding on main, not a plain push trigger - avoids ever
+# deploying a commit whose lint/type/test suite failed. See PLAN.md §10/§13.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  build-and-push:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push api image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/Dockerfile.api
+          push: true
+          tags: ghcr.io/kashish1430/anomaly-detection-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push dashboard image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/Dockerfile.dashboard
+          push: true
+          tags: ghcr.io/kashish1430/anomaly-detection-dashboard:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      # Heavy work (building images) already happened above, on GitHub's
+      # runners - the EC2 box only ever pulls pre-built images, never builds
+      # (PLAN.md §09/§11: heavy work stays off the small serving box - the
+      # same principle api/export_scored_sample.py's split follows).
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/anomaly_detection_-_synth_llm
+            git pull
+            cd infra
+            docker compose pull
+            docker compose up -d
+            docker image prune -f
