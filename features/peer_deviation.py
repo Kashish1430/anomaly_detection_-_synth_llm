@@ -8,6 +8,23 @@ from features.utils import sort_by_customer_time
 MAD_TO_STD = 1.4826  # scale factor so MAD approximates std under normality
 
 
+def compute_peer_group_stats(transactions: pd.DataFrame, customers: pd.DataFrame) -> pd.DataFrame:
+    """Median/MAD of transaction amount per peer_group (segment x home
+    country) - the group-level statistics compute_peer_deviation_features
+    scores each transaction against. Exposed separately so
+    api/load_full_history.py can persist these once, offline, into Postgres's
+    peer_group_stats table - live per-transaction scoring (api/live_features.py)
+    looks them up instead of recomputing over a full peer group's rows on
+    every request (see CLAUDE.md's Week 7 load_data.py incident on why that
+    matters on this box).
+    """
+    df = transactions.merge(customers[["customer_id", "peer_group"]], on="customer_id", how="left")
+    return df.groupby("peer_group")["amount"].agg(
+        peer_median="median",
+        peer_mad=lambda s: (s - s.median()).abs().median(),
+    )
+
+
 def compute_peer_deviation_features(
     transactions: pd.DataFrame, customers: pd.DataFrame
 ) -> pd.DataFrame:
@@ -26,10 +43,7 @@ def compute_peer_deviation_features(
         customers[["customer_id", "peer_group"]], on="customer_id", how="left"
     )
 
-    peer_stats = df.groupby("peer_group")["amount"].agg(
-        peer_median="median",
-        peer_mad=lambda s: (s - s.median()).abs().median(),
-    )
+    peer_stats = compute_peer_group_stats(transactions, customers)
     df = df.merge(peer_stats, on="peer_group", how="left")
 
     mad_safe = df["peer_mad"].replace(0, np.nan) * MAD_TO_STD

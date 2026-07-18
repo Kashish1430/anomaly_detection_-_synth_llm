@@ -359,6 +359,178 @@ def test_get_feedback_endpoint_404_for_unknown_transaction(tmp_path, monkeypatch
     assert response.status_code == 404
 
 
+async def _fake_get_customer(pool, customer_id):
+    return (
+        {
+            "customer_id": "cust-1",
+            "segment": "retail",
+            "home_country": "GB",
+            "declared_risk_rating": "low",
+            "peer_group": "retail_GB",
+        }
+        if customer_id == "cust-1"
+        else None
+    )
+
+
+async def _fake_insert_customer(
+    pool, customer_id, segment, home_country, declared_risk_rating, peer_group
+):
+    return {
+        "customer_id": customer_id,
+        "segment": segment,
+        "home_country": home_country,
+        "declared_risk_rating": declared_risk_rating,
+        "peer_group": peer_group,
+    }
+
+
+async def _fake_list_customer_transactions(pool, customer_id):
+    return []
+
+
+async def _fake_get_peer_group_stats(pool, peer_group):
+    return None
+
+
+async def _fake_insert_scored_transaction(pool, *args, **kwargs):
+    return {}
+
+
+RAW_TRANSACTION_PAYLOAD = {
+    "customer_id": "cust-1",
+    "timestamp": "2026-01-01T10:00:00Z",
+    "amount": 9000.0,
+    "direction": "debit",
+    "channel": "online",
+    "counterparty_country": "PA",
+    "is_cross_border": True,
+}
+
+
+def test_predict_transaction_flagged_generates_and_persists_explanation(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "get_customer", _fake_get_customer)
+    monkeypatch.setattr(api_main, "list_customer_transactions", _fake_list_customer_transactions)
+    monkeypatch.setattr(api_main, "get_peer_group_stats", _fake_get_peer_group_stats)
+    monkeypatch.setattr(api_main, "score_features", lambda bundle, features: (0.95, True))
+    monkeypatch.setattr(
+        "api.explain.get_llm_client",
+        lambda config: _FakeClient(
+            explanation=ExplanationOutput(
+                explanation="Large round amount to a new high-risk-country counterparty.",
+                typology="layering",
+                confidence=0.8,
+                likely_false_positive=False,
+            )
+        ),
+    )
+
+    persisted = {}
+
+    async def _capture_insert_scored_transaction(pool, transaction_id, *args, **kwargs):
+        persisted["transaction_id"] = transaction_id
+        return {}
+
+    async def _capture_insert_explanation(pool, transaction_id, explanation, *args, **kwargs):
+        persisted["explanation"] = explanation
+        return {}
+
+    monkeypatch.setattr(api_main, "insert_scored_transaction", _capture_insert_scored_transaction)
+    monkeypatch.setattr(api_main, "insert_explanation", _capture_insert_explanation)
+
+    with TestClient(api_main.app) as client:
+        response = client.post("/transactions/predict", json=RAW_TRANSACTION_PAYLOAD)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["is_flagged"] is True
+    assert body["anomaly_probability"] == 0.95
+    assert body["explanation"]
+    assert body["typology"] == "layering"
+    assert body["transaction_id"].startswith("LIVE")
+    assert persisted["transaction_id"] == body["transaction_id"]
+    assert persisted["explanation"] == body["explanation"]
+
+
+def test_predict_transaction_not_flagged_skips_explanation(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "get_customer", _fake_get_customer)
+    monkeypatch.setattr(api_main, "list_customer_transactions", _fake_list_customer_transactions)
+    monkeypatch.setattr(api_main, "get_peer_group_stats", _fake_get_peer_group_stats)
+    monkeypatch.setattr(api_main, "score_features", lambda bundle, features: (0.02, False))
+    monkeypatch.setattr(api_main, "insert_scored_transaction", _fake_insert_scored_transaction)
+
+    async def _explain_should_not_be_called(*args, **kwargs):
+        raise AssertionError("explain_transaction should not be called when not flagged")
+
+    monkeypatch.setattr(api_main, "explain_transaction", _explain_should_not_be_called)
+
+    with TestClient(api_main.app) as client:
+        response = client.post("/transactions/predict", json=RAW_TRANSACTION_PAYLOAD)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["is_flagged"] is False
+    assert body["explanation"] is None
+    assert body["source"] is None
+
+
+def test_predict_transaction_registers_new_customer(tmp_path, monkeypatch):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "get_customer", _fake_get_customer)
+    monkeypatch.setattr(api_main, "insert_customer", _fake_insert_customer)
+    monkeypatch.setattr(api_main, "list_customer_transactions", _fake_list_customer_transactions)
+    monkeypatch.setattr(api_main, "get_peer_group_stats", _fake_get_peer_group_stats)
+    monkeypatch.setattr(api_main, "score_features", lambda bundle, features: (0.02, False))
+    monkeypatch.setattr(api_main, "insert_scored_transaction", _fake_insert_scored_transaction)
+
+    payload = {
+        **RAW_TRANSACTION_PAYLOAD,
+        "customer_id": "cust-brand-new",
+        "new_customer_segment": "retail",
+        "new_customer_home_country": "GB",
+        "new_customer_declared_risk_rating": "low",
+    }
+    with TestClient(api_main.app) as client:
+        response = client.post("/transactions/predict", json=payload)
+
+    assert response.status_code == 200
+
+
+def test_predict_transaction_unknown_customer_without_new_customer_fields_returns_400(
+    tmp_path, monkeypatch
+):
+    bundle_path = _write_bundle(tmp_path, monkeypatch)
+
+    import api.main as api_main
+
+    api_main.load_bundle.cache_clear()
+    api_main.config.model_bundle_path = str(bundle_path)
+    monkeypatch.setattr(api_main, "get_customer", _fake_get_customer)
+
+    payload = {**RAW_TRANSACTION_PAYLOAD, "customer_id": "cust-unknown"}
+    with TestClient(api_main.app) as client:
+        response = client.post("/transactions/predict", json=payload)
+
+    assert response.status_code == 400
+
+
 def test_transaction_detail_endpoint_404(tmp_path, monkeypatch):
     bundle_path = _write_bundle(tmp_path, monkeypatch)
 

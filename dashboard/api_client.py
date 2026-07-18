@@ -77,3 +77,11 @@ def submit_feedback(base_url: str, transaction_id: str, verdict: str, note: str 
 
 def list_feedback(base_url: str, transaction_id: str) -> list[dict]:
     return _request("GET", base_url, f"/transactions/{transaction_id}/feedback")
+
+
+def predict_transaction(base_url: str, raw_transaction: dict, timeout: float = 300) -> dict:
+    # Generous timeout, same reasoning as explain_transaction: this can call
+    # the LLM reasoning layer internally if the transaction gets flagged.
+    return _request(
+        "POST", base_url, "/transactions/predict", timeout=timeout, json=raw_transaction
+    )

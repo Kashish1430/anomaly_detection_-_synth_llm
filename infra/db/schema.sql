@@ -37,6 +37,18 @@ CREATE INDEX IF NOT EXISTS idx_transactions_flagged ON transactions (is_flagged)
 CREATE INDEX IF NOT EXISTS idx_transactions_customer ON transactions (customer_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_timestamp ON transactions ("timestamp");
 
+-- Precomputed median/MAD per peer_group (segment x home_country, see
+-- data_sim/customers.py) - features/peer_deviation.py needs these to compute
+-- peer_zscore, but recomputing them live from a full peer group's raw rows
+-- (up to ~7,870 customers' worth of transactions) is exactly the kind of
+-- heavy per-request work this box can't afford (see CLAUDE.md's Week 7
+-- load_data.py incident). Populated once, offline, by api/load_full_history.py.
+CREATE TABLE IF NOT EXISTS peer_group_stats (
+    peer_group TEXT PRIMARY KEY,
+    peer_median DOUBLE PRECISION NOT NULL,
+    peer_mad DOUBLE PRECISION NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS explanations (
     transaction_id TEXT PRIMARY KEY REFERENCES transactions(transaction_id),
     explanation TEXT NOT NULL,

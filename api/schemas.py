@@ -91,6 +91,42 @@ class FeedbackResponse(BaseModel):
     submitted_at: datetime
 
 
+class RawTransactionRequest(BaseModel):
+    """A genuinely new transaction, as it would arrive in production - raw
+    fields only, none of the 18 engineered features. /transactions/predict
+    computes those from this customer's stored history (api/live_features.py)
+    before scoring, unlike /score and /explain which take features pre-computed.
+
+    new_customer_segment/home_country/declared_risk_rating are only used if
+    customer_id doesn't already exist in `customers` - they let a genuinely
+    new customer be registered on the fly rather than rejected outright, since
+    a live system can't assume every customer_id it ever sees was already
+    known at deploy time.
+    """
+
+    customer_id: str
+    timestamp: datetime
+    amount: float
+    direction: str
+    channel: str
+    counterparty_id: str | None = None
+    counterparty_country: str | None = None
+    is_cross_border: bool = False
+    new_customer_segment: str | None = None
+    new_customer_home_country: str | None = None
+    new_customer_declared_risk_rating: str | None = None
+
+
+class PredictResponse(BaseModel):
+    transaction_id: str
+    anomaly_probability: float = Field(ge=0.0, le=1.0)
+    is_flagged: bool
+    explanation: str | None = None
+    typology: Typology | None = None
+    source: Literal["llm", "fallback"] | None = None
+    fact_check_passed: bool | None = None
+
+
 class TransactionResponse(BaseModel):
     """A row from Postgres's `transactions` table (infra/db/schema.sql) - the
     dashboard's browsable, flagged-transaction universe, loaded once offline by
