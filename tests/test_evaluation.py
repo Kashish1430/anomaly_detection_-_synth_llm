@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from evaluation.effort_reduction import capacity_for_target_recall, effort_reduction_summary
 from evaluation.fairness import (
     flagging_rate_by_group,
     parity_tests_vs_reference,
@@ -90,6 +91,48 @@ def test_rates_at_threshold_hand_crafted():
     assert result["fp"] == 1
     assert result["precision"] == pytest.approx(2 / 3)
     assert result["recall"] == pytest.approx(1.0)
+
+
+def test_capacity_for_target_recall_hand_crafted():
+    # perfect ranking: 5 positives occupy the 5 highest scores out of 10
+    y_true = np.array([1, 1, 1, 1, 1, 0, 0, 0, 0, 0])
+    y_score = np.array([10, 9, 8, 7, 6, 5, 4, 3, 2, 1])
+
+    # 3 of 5 positives = 60% recall, reached by flagging the top 3 of 10 rows
+    assert capacity_for_target_recall(y_true, y_score, target_recall=0.6) == pytest.approx(0.3)
+    # all 5 positives = 100% recall, reached by flagging the top 5 of 10 rows
+    assert capacity_for_target_recall(y_true, y_score, target_recall=1.0) == pytest.approx(0.5)
+
+
+def test_effort_reduction_summary_hand_crafted():
+    n = 100
+    y_true = np.zeros(n)
+    y_true[:10] = 1  # 10 true anomalies out of 100 rows
+
+    # baseline's top-2-by-score picks 1 true anomaly (index 0) and 1 false
+    # positive (index 50) -> precision 0.5, recall 0.1 @ 2% capacity
+    baseline_score = np.ones(n)
+    baseline_score[0] = 100
+    baseline_score[50] = 99
+
+    # tuned model's top-2-by-score picks 2 true anomalies -> precision 1.0,
+    # recall 0.2 @ 2% capacity, and only needs its own top-1 to match the
+    # baseline's 0.1 recall
+    tuned_score = np.ones(n)
+    tuned_score[0] = 100
+    tuned_score[1] = 99
+
+    result = effort_reduction_summary(y_true, baseline_score, tuned_score, capacity_frac=0.02)
+
+    assert result["baseline_metrics"]["precision"] == pytest.approx(0.5)
+    assert result["baseline_metrics"]["recall"] == pytest.approx(0.1)
+    assert result["tuned_metrics"]["precision"] == pytest.approx(1.0)
+    assert result["tuned_metrics"]["recall"] == pytest.approx(0.2)
+    # tuned model has zero false positives at fixed capacity -> 100% FP reduction
+    assert result["fp_reduction_at_fixed_capacity"] == pytest.approx(1.0)
+    # tuned model only needs its own top-1 (1% capacity) to match baseline's 0.1 recall
+    assert result["equivalent_capacity_frac_for_tuned_model"] == pytest.approx(0.01)
+    assert result["manual_review_effort_reduction"] == pytest.approx(0.5)
 
 
 def test_flagging_rate_by_group_hand_crafted():

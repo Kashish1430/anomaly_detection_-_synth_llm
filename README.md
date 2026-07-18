@@ -6,13 +6,27 @@ A portfolio project: a synthetic retail-banking transaction dataset, an Isolatio
 
 > Independent portfolio project on synthetic data. Not a real bank engagement or a regulator-reviewed system — see `docs/model_validation_report.md` for the full scope statement.
 
-Full plan and rationale: [`PLAN.md`](PLAN.md). Current status and next steps: [`CLAUDE.md`](CLAUDE.md). What every column/feature means: [`docs/data_dictionary.md`](docs/data_dictionary.md).
+Full plan and rationale: [`PLAN.md`](PLAN.md). Current status and next steps: [`CLAUDE.md`](CLAUDE.md). What every column/feature means: [`docs/data_dictionary.md`](docs/data_dictionary.md). Model card: [`docs/model_card.md`](docs/model_card.md).
+
+![Architecture diagram: offline batch pipeline, live predict pipeline, and deployed topology](docs/architecture.svg)
 
 ## Status
 
 Weeks 1-7 complete (simulator, features, tuned model, Claude reasoning layer, statistical validation, model-risk report, containerized API + dashboard, CI/CD, live HTTPS deploy) plus a live predict pipeline added after Week 7. Week 8 (polish & buffer) next. Full detail in [`CLAUDE.md`](CLAUDE.md).
 
 **Live demo:** https://18-133-210-144.sslip.io — browse flagged transactions, generate explanations, submit investigator feedback, or score a brand-new transaction end to end (feature engineering -> model -> LLM explanation -> persisted).
+
+## Results
+
+Every number below is real and reproducible from this repo (`CLAUDE.md`'s "Measured results" table has full sourcing) — none are backfilled to match an aspirational target.
+
+| Metric | Value |
+|---|---|
+| Anomaly precision | 30.0% -> **58.3%** (95% CI [56.8%, 59.9%]) @ 2% review capacity, vs. a 1.56% base rate |
+| Manual review effort reduction | **70.9%** less review volume needed to match the baseline's recall |
+| False positives at fixed review capacity | **48.5%** fewer, baseline vs. tuned model, same TEST split |
+
+A dedicated two-proportion z-test attempt to tune the decision threshold *further* below the naive top-2%-capacity cutoff found no statistically validated improvement — reported as a null result rather than re-run until something better appeared. Full methodology, limitations, and the segment-fairness finding: [`docs/model_card.md`](docs/model_card.md) and [`docs/model_validation_report.md`](docs/model_validation_report.md).
 
 ## API usage
 

@@ -1,0 +1,231 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 960" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <defs>
+    <style>
+      :root {
+        --surface:      #fcfcfb;
+        --page:         #f9f9f7;
+        --ink:          #0b0b0b;
+        --ink-2:        #52514e;
+        --ink-muted:    #898781;
+        --border:       #c3c2b7;
+        --hairline:     #e1e0d9;
+        --blue-tint:    #e8f0fb;
+        --blue-line:    #2a78d6;
+        --aqua-tint:    #e3f6ee;
+        --aqua-line:    #1baf7a;
+        --violet-tint:  #ece9f9;
+        --violet-line:  #4a3aa7;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --surface:      #1a1a19;
+          --page:         #0d0d0d;
+          --ink:          #ffffff;
+          --ink-2:        #c3c2b7;
+          --ink-muted:    #898781;
+          --border:       #383835;
+          --hairline:     #2c2c2a;
+          --blue-tint:    #16273b;
+          --blue-line:    #3987e5;
+          --aqua-tint:    #12291f;
+          --aqua-line:    #199e70;
+          --violet-tint:  #241f3d;
+          --violet-line:  #9085e9;
+        }
+      }
+      .page   { fill: var(--page); }
+      .card   { fill: var(--surface); stroke: var(--border); stroke-width: 1; }
+      .box    { fill: var(--surface); stroke: var(--border); stroke-width: 1.25; }
+      .title  { fill: var(--ink); font-size: 20px; font-weight: 700; }
+      .section{ fill: var(--ink); font-size: 13px; font-weight: 700; letter-spacing: 0.06em; }
+      .label  { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
+      .sub    { fill: var(--ink-2); font-size: 10.5px; }
+      .muted  { fill: var(--ink-muted); font-size: 10.5px; }
+      .arrow  { stroke: var(--ink-muted); stroke-width: 1.5; fill: none; }
+      .arrowd { stroke: var(--ink-muted); stroke-width: 1.5; fill: none; stroke-dasharray: 4 3; }
+    </style>
+    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="var(--ink-muted)" />
+    </marker>
+  </defs>
+
+  <rect class="page" x="0" y="0" width="1160" height="960" />
+  <text class="title" x="24" y="34">LLM-Augmented Transaction Anomaly Detection Engine — architecture</text>
+  <text class="sub" x="24" y="54">Two paths feed one serving layer, deployed on a single EC2 box. Full detail: docs/architecture.md</text>
+
+  <!-- ============ SECTION A: OFFLINE BATCH PIPELINE ============ -->
+  <rect class="card" x="24" y="76" width="1112" height="220" rx="10" />
+  <rect x="24" y="76" width="6" height="220" fill="var(--blue-line)" rx="3" />
+  <text class="section" x="48" y="100">OFFLINE / BATCH — ONE-TIME OR SCHEDULED</text>
+
+  <g>
+    <rect class="box" x="48" y="118" width="150" height="56" rx="8" fill="var(--blue-tint)" />
+    <text class="label" x="123" y="142" text-anchor="middle">data_sim/</text>
+    <text class="muted" x="123" y="160" text-anchor="middle">simulate.py (seeded)</text>
+  </g>
+  <path class="arrow" d="M198,146 H228" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="228" y="118" width="150" height="56" rx="8" fill="var(--blue-tint)" />
+    <text class="label" x="303" y="142" text-anchor="middle">features/</text>
+    <text class="muted" x="303" y="160" text-anchor="middle">build_feature_table</text>
+  </g>
+  <path class="arrow" d="M378,146 H408" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="408" y="118" width="170" height="56" rx="8" fill="var(--blue-tint)" />
+    <text class="label" x="493" y="142" text-anchor="middle">models/</text>
+    <text class="muted" x="493" y="160" text-anchor="middle">IsolationForest -&gt; LightGBM</text>
+  </g>
+  <path class="arrow" d="M578,146 H608" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="608" y="118" width="230" height="56" rx="8" fill="var(--blue-tint)" />
+    <text class="label" x="723" y="136" text-anchor="middle">export_scored_sample.py</text>
+    <text class="label" x="723" y="152" text-anchor="middle">load_full_history.py</text>
+    <text class="muted" x="723" y="168" text-anchor="middle">chunked COPY, 100k rows/commit</text>
+  </g>
+  <path class="arrow" d="M838,146 H868" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="868" y="118" width="220" height="56" rx="8" fill="var(--blue-tint)" />
+    <text class="label" x="978" y="136" text-anchor="middle">Postgres</text>
+    <text class="muted" x="978" y="152" text-anchor="middle">transactions, peer_group_stats</text>
+    <text class="muted" x="978" y="166" text-anchor="middle">full 1.2M-row history</text>
+  </g>
+
+  <path class="arrow" d="M950,174 V196" marker-end="url(#arrowhead)" />
+  <path class="arrow" d="M900,196 V174" marker-end="url(#arrowhead)" />
+  <g>
+    <rect class="box" x="748" y="196" width="220" height="56" rx="8" fill="var(--blue-tint)" />
+    <text class="label" x="858" y="220" text-anchor="middle">llm/</text>
+    <text class="muted" x="858" y="238" text-anchor="middle">Claude batch explanations, cached</text>
+  </g>
+
+  <text class="muted" x="48" y="280">Every heavy step (simulation, feature engineering, model fit/tune, bulk LLM calls) runs offline — the serving box only ever loads pre-computed results.</text>
+
+  <!-- ============ SECTION B: LIVE PREDICT PIPELINE ============ -->
+  <rect class="card" x="24" y="316" width="1112" height="200" rx="10" />
+  <rect x="24" y="316" width="6" height="200" fill="var(--aqua-line)" rx="3" />
+  <text class="section" x="48" y="340">LIVE PREDICT PATH — POST /transactions/predict (request time)</text>
+
+  <g>
+    <rect class="box" x="48" y="358" width="150" height="56" rx="8" fill="var(--aqua-tint)" />
+    <text class="label" x="123" y="382" text-anchor="middle">New transaction</text>
+    <text class="muted" x="123" y="400" text-anchor="middle">customer_id, amount...</text>
+  </g>
+  <path class="arrow" d="M198,386 H228" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="228" y="358" width="180" height="56" rx="8" fill="var(--aqua-tint)" />
+    <text class="label" x="318" y="378" text-anchor="middle">api/live_features.py</text>
+    <text class="muted" x="318" y="394" text-anchor="middle">per-customer history slice</text>
+    <text class="muted" x="318" y="408" text-anchor="middle">+ precomputed peer_zscore</text>
+  </g>
+  <path class="arrow" d="M408,386 H438" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="438" y="358" width="170" height="56" rx="8" fill="var(--aqua-tint)" />
+    <text class="label" x="523" y="382" text-anchor="middle">model_bundle.py</text>
+    <text class="muted" x="523" y="400" text-anchor="middle">score_features (same as /score)</text>
+  </g>
+  <path class="arrow" d="M608,386 H638" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="638" y="358" width="150" height="56" rx="8" fill="var(--aqua-tint)" />
+    <text class="label" x="713" y="382" text-anchor="middle">explain.py</text>
+    <text class="muted" x="713" y="400" text-anchor="middle">if flagged (same as /explain)</text>
+  </g>
+  <path class="arrow" d="M788,386 H818" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="818" y="358" width="130" height="56" rx="8" fill="var(--aqua-tint)" />
+    <text class="label" x="883" y="382" text-anchor="middle">Postgres</text>
+    <text class="muted" x="883" y="400" text-anchor="middle">persist + explanations</text>
+  </g>
+  <path class="arrow" d="M948,386 H978" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="978" y="358" width="134" height="56" rx="8" fill="var(--aqua-tint)" />
+    <text class="label" x="1045" y="378" text-anchor="middle">GET /transactions</text>
+    <text class="label" x="1045" y="394" text-anchor="middle">Dashboard</text>
+  </g>
+
+  <text class="muted" x="48" y="452">Reuses the same feature functions and score/explain code the offline path uses — no separate live-only implementation to drift out of sync.</text>
+  <text class="muted" x="48" y="470">New customer_id + segment/home_country/declared_risk_rating auto-registers with zero-history defaults; missing fields return a clean 400.</text>
+
+  <!-- ============ SECTION C: DEPLOYED TOPOLOGY ============ -->
+  <rect class="card" x="24" y="536" width="1112" height="400" rx="10" />
+  <rect x="24" y="536" width="6" height="400" fill="var(--violet-line)" rx="3" />
+  <text class="section" x="48" y="560">DEPLOYED TOPOLOGY — live at 18-133-210-144.sslip.io</text>
+
+  <g>
+    <rect class="box" x="48" y="600" width="120" height="56" rx="8" fill="var(--violet-tint)" />
+    <text class="label" x="108" y="632" text-anchor="middle">Internet</text>
+  </g>
+  <path class="arrow" d="M168,628 H198" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="198" y="600" width="170" height="56" rx="8" fill="var(--violet-tint)" />
+    <text class="label" x="283" y="622" text-anchor="middle">Nginx</text>
+    <text class="muted" x="283" y="638" text-anchor="middle">TLS (Let's Encrypt), host-level</text>
+  </g>
+  <path class="arrow" d="M368,616 H430" marker-end="url(#arrowhead)" />
+  <path class="arrow" d="M368,640 H430" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="430" y="588" width="180" height="48" rx="8" fill="var(--violet-tint)" />
+    <text class="label" x="520" y="608" text-anchor="middle">/  -&gt; Streamlit</text>
+    <text class="muted" x="520" y="624" text-anchor="middle">dashboard container</text>
+  </g>
+  <g>
+    <rect class="box" x="430" y="644" width="180" height="48" rx="8" fill="var(--violet-tint)" />
+    <text class="label" x="520" y="664" text-anchor="middle">/api/ -&gt; FastAPI</text>
+    <text class="muted" x="520" y="680" text-anchor="middle">api container (root_path=/api)</text>
+  </g>
+  <path class="arrow" d="M610,612 H700 V644" marker-end="url(#arrowhead)" />
+  <path class="arrow" d="M610,668 H670" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="670" y="644" width="160" height="48" rx="8" fill="var(--violet-tint)" />
+    <text class="label" x="750" y="664" text-anchor="middle">Postgres</text>
+    <text class="muted" x="750" y="680" text-anchor="middle">container, same EC2 host</text>
+  </g>
+
+  <text class="muted" x="48" y="720">All three containers run via Docker Compose on one t3.micro EC2 instance behind a single Elastic IP — a deliberate single-box design (see README "Scaling beyond a single box"), not a limitation.</text>
+
+  <!-- CI/CD lane -->
+  <rect x="48" y="750" width="1052" height="1" fill="var(--hairline)" />
+  <text class="section" x="48" y="778">CI/CD</text>
+
+  <g>
+    <rect class="box" x="48" y="796" width="160" height="56" rx="8" fill="var(--violet-tint)" />
+    <text class="label" x="128" y="818" text-anchor="middle">git push to main</text>
+    <text class="muted" x="128" y="834" text-anchor="middle">GitHub Actions CI</text>
+  </g>
+  <path class="arrow" d="M208,824 H238" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="238" y="796" width="170" height="56" rx="8" fill="var(--violet-tint)" />
+    <text class="label" x="323" y="818" text-anchor="middle">deploy.yml</text>
+    <text class="muted" x="323" y="834" text-anchor="middle">triggered on CI success</text>
+  </g>
+  <path class="arrow" d="M408,824 H438" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="438" y="796" width="170" height="56" rx="8" fill="var(--violet-tint)" />
+    <text class="label" x="523" y="818" text-anchor="middle">Build + push GHCR</text>
+    <text class="muted" x="523" y="834" text-anchor="middle">on GitHub's runners</text>
+  </g>
+  <path class="arrowd" d="M608,824 H638" marker-end="url(#arrowhead)" />
+
+  <g>
+    <rect class="box" x="638" y="796" width="220" height="56" rx="8" fill="var(--violet-tint)" />
+    <text class="label" x="748" y="818" text-anchor="middle">SSH to EC2</text>
+    <text class="muted" x="748" y="834" text-anchor="middle">git pull &amp;&amp; compose pull &amp;&amp; up -d</text>
+  </g>
+  <path class="arrowd" d="M748,796 V700" marker-end="url(#arrowhead)" />
+  <text class="muted" x="762" y="748">recreates containers</text>
+
+  <text class="muted" x="48" y="880">The EC2 box never builds images itself; a lint/type/test failure on main never reaches deploy.yml.</text>
+</svg>

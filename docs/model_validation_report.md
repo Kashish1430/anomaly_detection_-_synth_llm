@@ -88,6 +88,8 @@ Two checks (`evaluation/sensitivity.py`), run against a 20,000-row TEST sample:
 
 A genuine, large improvement from adding behavioural features and supervised learning. Still below the original CV-draft placeholder of 89% (expected and intentional — see the project's integrity rule: placeholder numbers are never backfilled to match a real result).
 
+**Effort/false-positive framing** (`evaluation/run_effort_reduction_check.py`, Week 8): re-evaluating both models on the identical TEST split at a literal fixed top-2%-capacity cutoff (rather than the OOF-calibrated probability threshold above) gives baseline precision/recall of 29.1%/37.5% and tuned 63.5%/82.0% — close to, but not identical to, the headline 30.0%/58.3% figures, since it answers a slightly different question (fixed capacity fraction vs. fixed absolute threshold). At that fixed capacity, the tuned model cuts false positives by 48.5% and needs only 0.58% capacity (vs. the baseline's 2%) to match the baseline's recall — a 70.9% reduction in review volume for the same detection outcome. Full numbers: `data/effort_reduction_check_results.json`.
+
 ## 8. Bias & fairness check
 
 Statistical-parity and equalized-odds checks (`evaluation/fairness.py`) across three customer groupings, TEST set (n=182,990):
@@ -150,4 +152,4 @@ In a real deployment, each role below would be a distinct person independently r
 
 ---
 
-*Sources for every number in this report: `CLAUDE.md` "Measured results" table, `data/simulated/manifest.json`, and the `evaluation/run_fairness_check.py`, `evaluation/run_sensitivity_check.py`, and `evaluation/run_monitoring_check.py` outputs produced 2026-07-15 against MLflow run `e12a18e78ab144cea58c39d513d23007`.*
+*Sources for every number in this report: `CLAUDE.md` "Measured results" table, `data/simulated/manifest.json`, and the `evaluation/run_fairness_check.py`, `evaluation/run_sensitivity_check.py`, and `evaluation/run_monitoring_check.py` outputs produced 2026-07-15, plus `evaluation/run_effort_reduction_check.py` produced 2026-07-18, all against MLflow run `e12a18e78ab144cea58c39d513d23007`.*

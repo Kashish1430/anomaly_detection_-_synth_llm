@@ -269,33 +269,42 @@ The part you asked for explicitly: what breaks, how likely, how bad, what we do 
 
 ---
 
-## 15 · CV bullets, rewritten honestly
+## 15 · CV bullets, finalized against real numbers
 
-Same structure and ambition as your draft — swapped to Claude, and with the percentages held as variables until the pipeline reports real ones.
+Same structure and ambition as your draft — swapped to Claude, and with every number below traced to a real, reproducible run (`CLAUDE.md` "Measured results" table), not backfilled to match the original draft's placeholders.
 
 ```
-Reduced simulated manual transaction-review effort by ~[X]% on a self-generated
+Reduced simulated manual transaction-review effort by ~71% on a self-generated
 retail-banking dataset (1.2M synthetic records), by combining an Isolation
 Forest / LightGBM anomaly-scoring layer (scikit-learn) with a Claude reasoning
 layer that generated natural-language explanations of each flag for
 investigator triage.
 
-Improved anomaly precision from [X]% to [Y]% against a hand-labelled
-validation set, by engineering behavioural features (velocity, peer-group
-deviation, round-amount patterns) and using Claude to classify edge cases
-against AML red-flag typologies aligned to the FATF Recommendations and
+Improved anomaly precision from 30.0% to 58.3% (95% CI [56.8%, 59.9%]) against
+a hand-labelled validation set, by engineering behavioural features (velocity,
+peer-group deviation, round-amount patterns) and using Claude to classify edge
+cases against AML red-flag typologies aligned to the FATF Recommendations and
 UK MLR 2017.
 
-Cut false-positive alerts by ~[X]%, by tuning decision thresholds through
-hypothesis testing (two-proportion z-tests, α = 0.05) and validating
-stability across time-based cross-validation folds.
+Cut false-positive alerts by ~48% at a fixed investigator review capacity,
+by combining behavioural feature engineering with supervised learning over
+the unsupervised baseline - validated with hypothesis testing (two-proportion
+z-tests, α = 0.05) that also caught and reported a further threshold-tuning
+attempt as a statistically null result, rather than a claimed improvement
+that wouldn't have held up.
 
 Documented the full model lifecycle in a validation and bias report
 structured to SR 11-7 / PRA SS1/23 model-risk-management practice, making
 outputs defensible to a non-technical review audience.
 ```
 
-Fill the `[X]`/`[Y]` placeholders in Week 8, from the numbers Weeks 2–3 actually produced — and be ready to say "independent project, synthetic data" in the same breath if asked, not as a hedge but as the accurate description of real, demonstrable work.
+**Where each number comes from, and the one nuance worth knowing before citing them:**
+
+- **71% effort reduction** and **48% fewer false positives** both come from `evaluation/run_effort_reduction_check.py`, comparing the baseline IsolationForest against the tuned LightGBM model on the *same* 70/15/15 TEST split (real figures: 70.9% and 48.5% respectively — see `CLAUDE.md`). This script evaluates both models at a literal fixed top-2%-by-score capacity cutoff, which is a *different* measurement from the 58.3%/30.0% headline precision figures below (those came from the original Week 3 run: baseline on an 80/20 split, tuned model at an OOF-calibrated probability threshold, not a same-split top-2%-capacity cutoff). Recomputed on the same split/method the two models land close but not identical (29.1%/63.5% instead of 30.0%/58.3%) — expected, not a discrepancy to chase, since they answer slightly different questions (fixed absolute threshold vs. fixed capacity fraction).
+- **30.0% -> 58.3% precision** is the original, more heavily cross-validated Week 3 number (threshold calibrated on 512K pooled out-of-fold rows spanning multiple TRAIN time windows) — kept as the headline precision bullet because it's the more statistically defensible of the two, not because it's larger.
+- **The false-positive bullet deliberately does not claim the z-test threshold-tuning experiment "succeeded"** — it didn't (see the null-result finding in Week 3's collapsible detail in `CLAUDE.md`). The bullet instead credits the real, validated source of the false-positive reduction (the baseline -> tuned-model jump), while still using the hypothesis-testing methodology as evidence the number wasn't just cherry-picked — the same z-test caught and correctly rejected the separate threshold-tuning attempt as not real.
+
+Be ready to say "independent project, synthetic data" in the same breath as these numbers if asked, not as a hedge but as the accurate description of real, demonstrable work.
 
 ---
 

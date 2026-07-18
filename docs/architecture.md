@@ -2,6 +2,8 @@
 
 Full rationale lives in `PLAN.md` §02. This document tracks the *as-built* architecture as it lands, week by week — `PLAN.md` is the plan, this is the record of what actually exists.
 
+![Architecture diagram: offline batch pipeline, live predict pipeline, and deployed topology](architecture.svg)
+
 ## Data flow
 
 Two paths feed the same serving layer: the original offline/batch path (training, and populating the dashboard's initial flagged sample), and the live predict path added after Week 7 (a genuinely new transaction arriving at request time).
