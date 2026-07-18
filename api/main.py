@@ -73,6 +73,7 @@ app = FastAPI(
     "detection engine (PLAN.md §02).",
     version="0.1.0",
     lifespan=lifespan,
+    root_path=config.root_path,
 )
 
 

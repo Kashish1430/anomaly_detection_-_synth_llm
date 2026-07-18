@@ -10,7 +10,32 @@ Full plan and rationale: [`PLAN.md`](PLAN.md). Current status and next steps: [`
 
 ## Status
 
-Week 2 done (feature pipeline + IsolationForest baseline). Week 3 (LightGBM + threshold tuning) next. No deployed demo yet.
+Weeks 1-7 complete (simulator, features, tuned model, Claude reasoning layer, statistical validation, model-risk report, containerized API + dashboard, CI/CD, live HTTPS deploy) plus a live predict pipeline added after Week 7. Week 8 (polish & buffer) next. Full detail in [`CLAUDE.md`](CLAUDE.md).
+
+**Live demo:** https://18-133-210-144.sslip.io — browse flagged transactions, generate explanations, submit investigator feedback, or score a brand-new transaction end to end (feature engineering -> model -> LLM explanation -> persisted).
+
+## API usage
+
+Interactive docs (Swagger UI, generated from the actual request/response schemas - can't drift out of sync): **https://18-133-210-144.sslip.io/api/docs**
+
+Score a new transaction directly:
+
+```bash
+curl -X POST https://18-133-210-144.sslip.io/api/transactions/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": "CUST0000000",
+    "timestamp": "2026-07-18T14:00:00Z",
+    "amount": 15000.0,
+    "direction": "debit",
+    "channel": "wire",
+    "counterparty_id": "CPTY-TEST-001",
+    "counterparty_country": "KY",
+    "is_cross_border": true
+  }'
+```
+
+For a `customer_id` that doesn't exist yet, add `new_customer_segment`, `new_customer_home_country`, and `new_customer_declared_risk_rating` to register it on the fly instead of getting a 400.
 
 ## Quickstart
 

@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
+from api.config import ApiConfig
 from api.db import open_pool
 from data_sim.config import SimConfig
 from data_sim.simulate import run as simulate_run
@@ -72,6 +73,14 @@ def _write_bundle(tmp_path, monkeypatch):
     bundle_path = tmp_path / "bundle.joblib"
     joblib.dump(bundle, bundle_path)
     return bundle_path
+
+
+def test_api_config_root_path_defaults_empty_and_reads_env(monkeypatch):
+    monkeypatch.delenv("API_ROOT_PATH", raising=False)
+    assert ApiConfig.from_env().root_path == ""
+
+    monkeypatch.setenv("API_ROOT_PATH", "/api")
+    assert ApiConfig.from_env().root_path == "/api"
 
 
 def test_health_and_score_endpoints(tmp_path, monkeypatch):
